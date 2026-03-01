@@ -1,0 +1,40 @@
+{
+  "name": "@mariachi/database-postgres",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@mariachi/ai": "workspace:*",
+    "@mariachi/audit": "workspace:*",
+    "@mariachi/auth": "workspace:*",
+    "@mariachi/billing": "workspace:*",
+    "@mariachi/config": "workspace:*",
+    "@mariachi/core": "workspace:*",
+    "@mariachi/database": "workspace:*",
+    "@mariachi/notifications": "workspace:*",
+    "@mariachi/webhooks": "workspace:*",
+    "drizzle-orm": "^0.38",
+    "postgres": "^3.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.7",
+    "tsup": "^8",
+    "drizzle-kit": "^0.30"
+  }
+}

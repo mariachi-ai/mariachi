@@ -1,0 +1,29 @@
+{
+  "name": "@mariachi/services",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@mariachi/core": "workspace:*",
+    "@mariachi/communication": "workspace:*",
+    "@mariachi/database": "workspace:*",
+    "@mariachi/cache": "workspace:*",
+    "@mariachi/events": "workspace:*",
+    "@mariachi/jobs": "workspace:*",
+    "@mariachi/audit": "workspace:*",
+    "zod": "^3.24"
+  },
+  "devDependencies": {
+    "typescript": "^5.7",
+    "tsup": "^8",
+    "vitest": "^3"
+  }
+}

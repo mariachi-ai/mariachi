@@ -1,0 +1,27 @@
+{
+  "name": "@mariachi/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "mariachi": "./dist/index.js" },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@mariachi/create": "workspace:*",
+    "commander": "^13"
+  },
+  "devDependencies": {
+    "typescript": "^5.7",
+    "tsup": "^8"
+  }
+}

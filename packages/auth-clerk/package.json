@@ -1,0 +1,33 @@
+{
+  "name": "@mariachi/auth-clerk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@clerk/backend": "^1",
+    "@mariachi/auth": "workspace:*",
+    "@mariachi/core": "workspace:*",
+    "@mariachi/server": "workspace:*",
+    "@mariachi/webhooks": "workspace:*",
+    "svix": "^1"
+  }
+}

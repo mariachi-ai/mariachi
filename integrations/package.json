@@ -1,0 +1,20 @@
+{
+  "name": "@mariachi/integrations-workspace",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@mariachi/core": "workspace:*",
+    "@mariachi/integrations": "workspace:*",
+    "zod": "^3.24"
+  },
+  "devDependencies": {
+    "typescript": "^5.7",
+    "tsup": "^8"
+  }
+}

@@ -1,0 +1,31 @@
+---
+description: Mariachi framework conventions and patterns. Provides architecture, naming, import boundaries, and anti-patterns for generating correct code.
+alwaysApply: true
+---
+
+# Mariachi Framework
+
+Read these files before writing any code:
+
+- `.mariachi/architecture.md` — Three-layer architecture (Facade → Controller → Service), import boundaries, naming conventions
+- `.mariachi/conventions.md` — TypeScript/ESM rules, dependency rules, error handling, anti-patterns
+- `.mariachi/packages.md` — All 28 packages with when to use each one
+- `.mariachi/patterns.md` — Adapter factory, abstract service class, DI container, context propagation, Zod at boundaries
+
+For step-by-step instructions, see `docs/recipes/`:
+- `add-domain-entity.md` — Schema, repository, service, handler, controller, tests
+- `add-background-job.md` — Job definition, worker registration, scheduling
+- `add-webhook-endpoint.md` — WebhookController with direct/queue modes
+- `add-integration.md` — Third-party integration with credentials and retry
+- `wiring-and-bootstrap.md` — Full initialization order from config to running servers
+
+For decision trees and gotchas, see `docs/ai-guide.md`.
+
+## Critical Rules
+
+- Relative imports are extensionless: `import { foo } from './bar'` (not `'./bar.js'`)
+- Controllers never import services — always use `communication.call()`
+- Every operation takes `Context` as first argument — never drop context
+- Throw typed errors (`MariachiError` subclasses), never raw `Error`
+- Use factory functions (`createCache`, `createSearch`), never instantiate adapters directly
+- Validate with Zod at boundaries (controller input, handler schemas, job payloads)

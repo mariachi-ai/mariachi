@@ -1,0 +1,31 @@
+{
+  "name": "@mariachi/lifecycle",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@mariachi/core": "workspace:*",
+    "@mariachi/config": "workspace:*",
+    "@mariachi/observability": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7",
+    "tsup": "^8"
+  }
+}
