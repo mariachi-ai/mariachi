@@ -8,7 +8,7 @@ This walks through defining a new job, registering it in the worker, and enqueui
 
 Jobs are plain objects with `name`, `schema` (Zod), `retry` config, and a `handler`.
 
-**File:** `apps/worker/src/jobs/process-order.job.ts`
+**File:** e.g. `src/jobs/process-order.job.ts`
 
 ```ts
 import { z } from 'zod';
@@ -31,14 +31,12 @@ export const ProcessOrderJob = {
 ```
 
 **Job handler signature:**
-- `data` -- validated payload (matches the Zod schema)
-- `ctx` -- job context with `logger`, `traceId`, `attemptNumber`, `jobId`
+- `data` — validated payload (matches the Zod schema)
+- `ctx` — job context with `logger`, `traceId`, `attemptNumber`, `jobId`
 
 **Retry options:**
-- `attempts` -- max retries
-- `backoff` -- `'exponential'` or `'fixed'`
-
-**Reference:** `apps/worker/src/jobs/send-email.job.ts`
+- `attempts` — max retries
+- `backoff` — `'exponential'` or `'fixed'`
 
 ---
 
@@ -46,7 +44,7 @@ export const ProcessOrderJob = {
 
 Add the job to the worker entry point.
 
-**File:** `apps/worker/src/index.ts` (add to existing)
+**File:** e.g. `src/worker/index.ts`
 
 ```ts
 import { ProcessOrderJob } from './jobs/process-order.job';
@@ -54,15 +52,13 @@ import { ProcessOrderJob } from './jobs/process-order.job';
 jobQueue.registerJob(ProcessOrderJob);
 ```
 
-**Reference:** `apps/worker/src/index.ts` -- see how `SendEmailJob` and `SystemCleanupJob` are registered.
-
 ---
 
 ## 3. Add a Schedule (Optional)
 
-If the job should run on a cron schedule, add an entry to the schedules file.
+If the job should run on a cron schedule, add an entry to your schedules.
 
-**File:** `apps/worker/src/jobs/schedules.ts`
+**File:** e.g. `src/jobs/schedules.ts`
 
 ```ts
 export const schedules = [
@@ -71,7 +67,7 @@ export const schedules = [
 ];
 ```
 
-Schedules are registered in the worker entry point:
+Register in the worker entry:
 
 ```ts
 for (const schedule of schedules) {
@@ -110,6 +106,7 @@ Use `TestJobQueue` from `@mariachi/testing`:
 ```ts
 import { describe, it, expect } from 'vitest';
 import { TestJobQueue } from '@mariachi/testing';
+import { ProcessOrderJob } from '../process-order.job';
 
 describe('ProcessOrderJob', () => {
   it('processes an order', async () => {
@@ -152,8 +149,8 @@ shutdown.register({
 
 ## Checklist
 
-- [ ] Job defined in `apps/worker/src/jobs/` with Zod schema and retry config
+- [ ] Job defined with Zod schema and retry config
 - [ ] Job registered via `jobQueue.registerJob()` in worker entry point
-- [ ] Schedule added (if cron-based) in `apps/worker/src/jobs/schedules.ts`
+- [ ] Schedule added (if cron-based)
 - [ ] Enqueue call added in the service that triggers the job
 - [ ] Tests added using `TestJobQueue`

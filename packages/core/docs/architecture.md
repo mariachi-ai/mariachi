@@ -1,6 +1,6 @@
 # Mariachi Framework Architecture
 
-Mariachi is an LLM-optimized TypeScript backend framework with adapter-based abstractions. It provides a modular monorepo structure where external dependencies (databases, caches, message queues, third-party APIs) are hidden behind config-driven adapters, enabling vendor independence and testability.
+Mariachi is an LLM-optimized TypeScript backend framework with adapter-based abstractions. It provides a modular structure where external dependencies (databases, caches, message queues, third-party APIs) are hidden behind config-driven adapters, enabling vendor independence and testability.
 
 ## Three-Layer Architecture
 
@@ -77,7 +77,7 @@ flowchart TB
 
 ## Monolith vs Microservice
 
-Mariachi is designed as a **modular monolith**. All packages live in one codebase and share the same process. The communication layer (`@mariachi/communication`) uses an in-process adapter by default, routing procedure calls directly to registered handlers.
+Mariachi is designed as a **modular monolith**. All packages can live in one codebase and share the same process. The communication layer (`@mariachi/communication`) uses an in-process adapter by default, routing procedure calls directly to registered handlers.
 
 For future scaling, the communication layer can be swapped for a transport adapter (e.g., message queue, gRPC) without changing controllers or services. The framework does not prescribe microservices; teams can extract services later if needed.
 

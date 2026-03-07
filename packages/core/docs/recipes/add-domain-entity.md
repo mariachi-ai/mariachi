@@ -8,11 +8,11 @@ This walks through adding a new domain (e.g. `orders`) from schema to API endpoi
 
 Create the table definition in `@mariachi/database`.
 
-**File:** `packages/database/src/schema/orders.ts`
+**File:** (in your app or shared package) e.g. `src/schema/orders.ts`
 
 ```ts
-import { defineTable } from '../table';
-import { column } from '../column';
+import { defineTable } from '@mariachi/database';
+import { column } from '@mariachi/database';
 
 export const ordersTable = defineTable('orders', {
   id:        column.uuid().primaryKey().defaultRandom(),
@@ -26,42 +26,29 @@ export const ordersTable = defineTable('orders', {
 });
 ```
 
-Export it from `packages/database/src/index.ts`:
-
-```ts
-export { ordersTable } from './schema/orders';
-```
-
-**Reference:** `packages/database/src/schema/users.ts`
-
 ---
 
 ## 2. Compile to Drizzle
 
-Add the compiled table in `@mariachi/database-postgres`.
+Add the compiled table for use with `@mariachi/database-postgres`.
 
-**File:** `packages/database-postgres/src/compiled-schemas.ts` (add to existing)
+**File:** e.g. `src/compiled-schemas.ts`
 
 ```ts
-import { ordersTable } from '@mariachi/database';
+import { ordersTable } from './schema/orders';
+import { compileTable } from '@mariachi/database-postgres';
 export const orders = compileTable(ordersTable);
-```
-
-Export from `packages/database-postgres/src/index.ts`:
-
-```ts
-export { orders } from './compiled-schemas';
 ```
 
 ---
 
 ## 3. Create the Repository
 
-**File:** `packages/database-postgres/src/repositories/orders.repository.ts`
+**File:** e.g. `src/repositories/orders.repository.ts`
 
 ```ts
 import type { Context } from '@mariachi/core';
-import { DrizzleRepository } from './drizzle.repository';
+import { DrizzleRepository } from '@mariachi/database-postgres';
 import { orders } from '../compiled-schemas';
 
 export interface Order {
@@ -88,20 +75,11 @@ export class DrizzleOrdersRepository extends DrizzleRepository<Order> {
 
 Inherited from `DrizzleRepository`: `findById`, `findMany`, `create`, `update`, `softDelete`, `hardDelete`, `paginate`, `count`.
 
-Export from `packages/database-postgres/src/index.ts`:
-
-```ts
-export { DrizzleOrdersRepository } from './repositories/orders.repository';
-export type { Order } from './repositories/orders.repository';
-```
-
-**Reference:** `packages/database-postgres/src/repositories/users.repository.ts`
-
 ---
 
 ## 4. Create the Service
 
-**File:** `apps/services/src/orders/orders.service.ts`
+**File:** e.g. `src/orders/orders.service.ts` (in your services app)
 
 ```ts
 import type { Context } from '@mariachi/core';
@@ -121,31 +99,24 @@ export const GetOrderInput = z.object({
 export const OrdersService = {
   create: async (ctx: Context, input: z.infer<typeof CreateOrderInput>) => {
     ctx.logger.info({ userId: input.userId }, 'Creating order');
-    // Replace with real repository call:
-    // const repo = new DrizzleOrdersRepository(db);
-    // return repo.create(ctx, input);
-    return { id: crypto.randomUUID(), ...input, createdAt: new Date(), updatedAt: new Date(), deletedAt: null };
+    const repo = new DrizzleOrdersRepository(db);
+    return repo.create(ctx, input);
   },
   getById: async (ctx: Context, input: z.infer<typeof GetOrderInput>) => {
     ctx.logger.info({ orderId: input.orderId }, 'Fetching order');
-    // Replace with real repository call:
-    // const repo = new DrizzleOrdersRepository(db);
-    // return repo.findById(ctx, input.orderId);
-    return null;
+    const repo = new DrizzleOrdersRepository(db);
+    return repo.findById(ctx, input.orderId);
   },
 };
 ```
-
-**Reference:** `apps/services/src/users/users.service.ts`
 
 ---
 
 ## 5. Register Communication Handlers
 
-**File:** `apps/services/src/orders/orders.handler.ts`
+**File:** e.g. `src/orders/orders.handler.ts`
 
 ```ts
-import { createCommunication } from '@mariachi/communication';
 import { OrdersService, CreateOrderInput, GetOrderInput } from './orders.service';
 import { z } from 'zod';
 
@@ -172,24 +143,22 @@ export function registerOrdersHandlers(communication: ReturnType<typeof createCo
 }
 ```
 
-Wire into the aggregate registration in `apps/services/src/index.ts`:
+Wire into your aggregate registration (e.g. in your services app entry):
 
 ```ts
 import { registerOrdersHandlers } from './orders/orders.handler';
 
 export function registerServiceHandlers(communication) {
   registerUsersHandlers(communication);
-  registerOrdersHandlers(communication);  // add this
+  registerOrdersHandlers(communication);
 }
 ```
-
-**Reference:** `apps/services/src/users/users.handler.ts`
 
 ---
 
 ## 6. Add the Controller
 
-**File:** `apps/api/src/controllers/orders.controller.ts`
+**File:** e.g. `src/controllers/orders.controller.ts` (in your API app)
 
 ```ts
 import { z } from 'zod';
@@ -228,23 +197,21 @@ export class OrdersController extends BaseController {
 }
 ```
 
-Register on a server in `apps/api/src/index.ts`:
+Register on your server:
 
 ```ts
 import { OrdersController } from './controllers/orders.controller';
 
 const publicServer = createPublicServer()
   .registerController(new UsersController())
-  .registerController(new OrdersController());  // add this
+  .registerController(new OrdersController());
 ```
-
-**Reference:** `apps/api/src/controllers/users.controller.ts`
 
 ---
 
 ## 7. Add Tests
 
-**File:** `apps/services/src/orders/test/orders.service.test.ts`
+**File:** e.g. `src/orders/test/orders.service.test.ts`
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -270,13 +237,12 @@ describe('OrdersService', () => {
 
 ## Checklist
 
-- [ ] Schema defined in `packages/database/src/schema/`
-- [ ] Schema exported from `packages/database/src/index.ts`
-- [ ] Compiled table added in `packages/database-postgres/src/compiled-schemas.ts`
-- [ ] Repository created in `packages/database-postgres/src/repositories/`
-- [ ] Service created in `apps/services/src/<domain>/`
+- [ ] Schema defined and exported
+- [ ] Compiled table added for Drizzle
+- [ ] Repository created extending `DrizzleRepository`
+- [ ] Service created in services app
 - [ ] Handler registered via `communication.register()`
 - [ ] Handler wired into `registerServiceHandlers()`
-- [ ] Controller created in `apps/api/src/controllers/`
-- [ ] Controller registered on server in `apps/api/src/index.ts`
+- [ ] Controller created in API app
+- [ ] Controller registered on server
 - [ ] Tests added

@@ -29,7 +29,7 @@ pnpm run test:run
 
 ## Adding a New Service
 
-Generate a service with handlers and tests:
+Generate a service with handlers and tests (if using `@mariachi/cli`):
 
 ```bash
 mariachi generate service <name>
@@ -41,27 +41,19 @@ Example:
 mariachi generate service orders
 ```
 
-Creates `apps/services/orders/` with `orders.service.ts`, `orders.handler.ts`, and tests.
+Creates a domain folder with `orders.service.ts`, `orders.handler.ts`, and tests.
 
 ## Adding a New Integration
 
-Generate an integration scaffold:
+Generate an integration scaffold (if using `@mariachi/cli`):
 
 ```bash
 mariachi generate integration <name>
 ```
 
-Example:
-
-```bash
-mariachi generate integration github
-```
-
-Creates `integrations/<name>/` with `index.ts`, `credentials.ts`, `client.ts`, `types.ts`, and `test.ts`.
-
 ## Validating
 
-Validate project structure and conventions:
+Validate project structure and conventions (if using `@mariachi/cli`):
 
 ```bash
 mariachi validate

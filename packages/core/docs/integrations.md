@@ -4,7 +4,7 @@ How to add and configure third-party integrations in Mariachi.
 
 ## How to Add an Integration
 
-1. **Generate the scaffold** (optional):
+1. **Generate the scaffold** (optional, if using `@mariachi/cli`):
 
    ```bash
    mariachi generate integration <name>
@@ -48,7 +48,7 @@ How to add and configure third-party integrations in Mariachi.
    });
    ```
 
-4. **Register in the registry** (`integrations/registry.ts`):
+4. **Register in the registry** (optional):
 
    ```ts
    registry.register({
@@ -65,19 +65,6 @@ How to add and configure third-party integrations in Mariachi.
 - Store secrets via `@mariachi/config` (e.g., env adapter); never hardcode.
 - Each integration defines its own credential schema.
 
-## Current Integrations
+## Step-by-step recipe
 
-### Slack
-
-Slack workspace integration for messaging.
-
-**Credential schema:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `botToken` | string | Yes | Slack Bot OAuth token (starts with `xoxb-`) |
-| `signingSecret` | string | Yes | Slack signing secret for request verification |
-
-**Functions:**
-
-- `slack.sendMessage` — Send a message to a channel (input: `channel`, `text`, optional `threadTs`)
+For a full walkthrough with credentials, client, types, and tests, see [recipes/add-integration.md](./recipes/add-integration.md).

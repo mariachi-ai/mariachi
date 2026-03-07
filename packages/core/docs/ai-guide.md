@@ -1,6 +1,6 @@
 # Mariachi AI Guide
 
-Concise reference for AI assistants generating code on the Mariachi framework. For quick lookups, see the [`.mariachi/`](../.mariachi/) rule files (architecture, patterns, conventions, packages). For step-by-step instructions, see the [recipes](./recipes/).
+Concise reference for AI assistants generating code on the Mariachi framework. For quick lookups, see [architecture.md](./architecture.md), [patterns.md](./patterns.md), [conventions.md](./conventions.md), and [packages.md](./packages.md). For step-by-step instructions, see the [recipes](./recipes/).
 
 ---
 
@@ -18,31 +18,29 @@ Apps map to layers:
 
 | App | Layer | Purpose |
 |-----|-------|---------|
-| `apps/api` | Facade + Controller | HTTP servers, controllers, auth |
-| `apps/services` | Service | Domain logic, handler registration |
-| `apps/worker` | Background | BullMQ job workers, schedules |
-
-See [`docs/architecture.md`](./architecture.md) for diagrams.
+| API app | Facade + Controller | HTTP servers, controllers, auth |
+| Services app | Service | Domain logic, handler registration |
+| Worker app | Background | BullMQ job workers, schedules |
 
 ---
 
 ## Decision Tree: Which Component to Use
 
 **"I need to handle an HTTP request"**
-→ Add a controller in `apps/api/src/controllers/` extending `BaseController`. Register on a server in `apps/api/src/index.ts`.
+→ Add a controller extending `BaseController`. Register on a server.
 
 **"I need to run business logic"**
-→ Create a service in `apps/services/src/<domain>/`. Register a handler via `communication.register()`. Call it from a controller via `communication.call('<domain>.<action>', ctx, input)`.
+→ Create a service in your services app. Register a handler via `communication.register()`. Call it from a controller via `communication.call('<domain>.<action>', ctx, input)`.
 
 **"I need to run something in the background"**
-→ Define a job in `apps/worker/src/jobs/` with a Zod schema and retry config. Enqueue via `jobQueue.enqueue(jobName, data)` from a service.
-→ See [`docs/recipes/add-background-job.md`](./recipes/add-background-job.md).
+→ Define a job with a Zod schema and retry config. Enqueue via `jobQueue.enqueue(jobName, data)` from a service.
+→ See [recipes/add-background-job.md](./recipes/add-background-job.md).
 
 **"I need to react to something that happened"**
 → Use the event bus: `eventBus.publish('user.created', payload)` and `eventBus.subscribe('user.created', handler)`. Adapter: Redis pub/sub or NATS.
 
 **"I need to run something on a schedule"**
-→ Add a schedule entry in `apps/worker/src/jobs/schedules.ts`: `{ name, cron, jobName, data }`.
+→ Add a schedule entry: `{ name, cron, jobName, data }`.
 
 **"I need to cache data"**
 → Use `cache.getOrSet(key, ttl, fetchFn)` from `@mariachi/cache`. Redis-backed.
@@ -54,17 +52,17 @@ See [`docs/architecture.md`](./architecture.md) for diagrams.
 → Use `@mariachi/realtime` with `WSAdapter`. Supports channels, broadcast, and per-user messaging.
 
 **"I need to accept webhooks from a third party"**
-→ Create a `WebhookController` in `apps/api/`. Choose `mode: 'direct'` (sync via communication) or `mode: 'queue'` (async via jobs).
-→ See [`docs/recipes/add-webhook-endpoint.md`](./recipes/add-webhook-endpoint.md).
+→ Create a `WebhookController`. Choose `mode: 'direct'` (sync via communication) or `mode: 'queue'` (async via jobs).
+→ See [recipes/add-webhook-endpoint.md](./recipes/add-webhook-endpoint.md).
 
 **"I need to integrate with an external service"**
-→ Use `defineIntegrationFn()` from `@mariachi/integrations`. See [`docs/recipes/add-integration.md`](./recipes/add-integration.md).
+→ Use `defineIntegrationFn()` from `@mariachi/integrations`. See [recipes/add-integration.md](./recipes/add-integration.md).
 
 **"I need to wire up and bootstrap an app from scratch"**
-→ See [`docs/recipes/wiring-and-bootstrap.md`](./recipes/wiring-and-bootstrap.md). Shows the full initialization sequence from config to running servers, with DI container registration order and startup/shutdown priorities.
+→ See [recipes/wiring-and-bootstrap.md](./recipes/wiring-and-bootstrap.md). Shows the full initialization sequence from config to running servers.
 
 **"I need to add a new domain entity end-to-end"**
-→ See [`docs/recipes/add-domain-entity.md`](./recipes/add-domain-entity.md).
+→ See [recipes/add-domain-entity.md](./recipes/add-domain-entity.md).
 
 ---
 
@@ -85,13 +83,13 @@ await startup.runAll(logger);
 import { createCommunication } from '@mariachi/communication';
 const communication = createCommunication();
 
-// Register a handler (in apps/services)
+// Register a handler (in services app)
 communication.register('users.create', {
   schema: { input: CreateUserInput, output: UserOutput },
   handler: (ctx, input) => UsersService.create(ctx, input),
 });
 
-// Call a handler (in apps/api controller)
+// Call a handler (in API controller)
 const result = await communication.call('users.create', ctx, input);
 ```
 
@@ -207,18 +205,18 @@ const repo = new TestRepository<User>();
 
 ## Common Gotchas
 
-1. **Communication handlers must be registered before `call()`**. In a monolith, call `registerServiceHandlers(communication)` from `apps/services` before starting the API server.
+1. **Communication handlers must be registered before `call()`**. Call your handler registration (e.g. `registerServiceHandlers(communication)`) before starting the API server.
 
-2. **No in-memory job adapter exists**. The worker app references `'memory'` as a fallback but `@mariachi/jobs` only implements BullMQ. Use `@mariachi/testing`'s `TestJobQueue` in tests.
+2. **No in-memory job adapter exists**. The worker uses BullMQ. Use `@mariachi/testing`'s `TestJobQueue` in tests.
 
-3. **`createCommunication()` returns an `InProcessAdapter`**. There is no gRPC/HTTP transport adapter yet. The communication layer is in-process only.
+3. **`createCommunication()` returns an `InProcessAdapter`**. The communication layer is in-process only.
 
 4. **Soft deletes are the default**. `DrizzleRepository.softDelete()` sets `deletedAt`. All queries automatically filter out soft-deleted rows. Use `hardDelete()` only when explicitly needed.
 
 5. **Tenant isolation is automatic in `DrizzleRepository`**. When `tenantColumn` is set and `ctx.tenantId` is present, all queries are scoped to that tenant.
 
-6. **`bootstrap()` registers Config and Logger in the DI container**. Other services pull them via `getContainer().resolve(KEYS.Logger)`. You don't need to pass logger explicitly to services that extend `Instrumentable`.
+6. **`bootstrap()` registers Config and Logger in the DI container**. Other services pull them via `getContainer().resolve(KEYS.Logger)`.
 
-7. **Controller route handlers receive `(ctx, body, params, query)`**. Don't destructure the Fastify request directly -- use the controller's handler signature.
+7. **Controller route handlers receive `(ctx, body, params, query)`**. Use the controller's handler signature, not raw Fastify request.
 
-8. **CORE_CONCEPT.md describes planned features**. Some adapters listed there (MySQL, SQLite, MongoDB, gRPC, tRPC, GraphQL) are not implemented. This guide reflects actual code only.
+8. **Some planned adapters are not implemented**. This guide reflects actual code only (Postgres, Redis, BullMQ, etc.).

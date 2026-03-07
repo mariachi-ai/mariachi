@@ -1,6 +1,8 @@
 # Mariachi
 
-Mariachi is a TypeScript backend framework designed to give you -- or an AI assistant -- a complete, opinionated starting point for building production backend applications. Instead of stitching together dozens of libraries and reinventing patterns for auth, billing, jobs, and notifications, Mariachi provides all of these as modular packages behind consistent adapter-based abstractions.
+Mariachi is a TypeScript backend framework designed to give you -- or an AI assistant -- a complete, opinionated starting point for building production backend applications.
+
+**Using Mariachi from npm?** Framework documentation (architecture, conventions, recipes, AI guide) is published with `@mariachi/core`. After `pnpm add @mariachi/core`, see `node_modules/@mariachi/core/README.md` and `node_modules/@mariachi/core/docs/` for the full docs. The rest of this README is for the monorepo itself. Instead of stitching together dozens of libraries and reinventing patterns for auth, billing, jobs, and notifications, Mariachi provides all of these as modular packages behind consistent adapter-based abstractions.
 
 The framework is structured as a **modular monolith**: all packages live in one monorepo and share a single process by default, but the architecture is designed so that any piece can be extracted into its own service later. You get the simplicity of a monolith with the option to scale into microservices when the time comes.
 

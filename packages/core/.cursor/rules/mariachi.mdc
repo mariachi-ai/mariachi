@@ -1,0 +1,36 @@
+---
+description: Mariachi framework conventions and patterns. Use when building with @mariachi/* packages. Read the docs in this package before writing code.
+alwaysApply: false
+---
+
+# Mariachi Framework (consumer)
+
+When working in a project that uses Mariachi, read these files from the installed package:
+
+**Quick reference (same content as root `.mariachi/` in the framework repo):**
+
+- `node_modules/@mariachi/core/.mariachi/architecture.md` — Three-layer architecture (Facade → Controller → Service), import boundaries, naming conventions
+- `node_modules/@mariachi/core/.mariachi/conventions.md` — TypeScript/ESM rules, dependency rules, error handling, anti-patterns
+- `node_modules/@mariachi/core/.mariachi/packages.md` — All 28 packages with when to use each one
+- `node_modules/@mariachi/core/.mariachi/patterns.md` — Adapter factory, abstract service class, DI container, context propagation, Zod at boundaries
+
+**Step-by-step recipes:**
+
+- `node_modules/@mariachi/core/docs/recipes/add-domain-entity.md` — Schema, repository, service, handler, controller, tests
+- `node_modules/@mariachi/core/docs/recipes/add-background-job.md` — Job definition, worker registration, scheduling
+- `node_modules/@mariachi/core/docs/recipes/add-webhook-endpoint.md` — WebhookController with direct/queue modes
+- `node_modules/@mariachi/core/docs/recipes/add-integration.md` — Third-party integration with credentials and retry
+- `node_modules/@mariachi/core/docs/recipes/wiring-and-bootstrap.md` — Full initialization order from config to running servers
+
+**Decision trees and gotchas:** `node_modules/@mariachi/core/docs/ai-guide.md`
+
+## Critical Rules
+
+- Relative imports are extensionless: `import { foo } from './bar'` (not `'./bar.js'`)
+- Controllers never import services — always use `communication.call()`
+- Every operation takes `Context` as first argument — never drop context
+- Throw typed errors (`MariachiError` subclasses), never raw `Error`
+- Use factory functions (`createCache`, `createSearch`), never instantiate adapters directly
+- Validate with Zod at boundaries (controller input, handler schemas, job payloads)
+
+**To use this rule in Cursor:** Copy this file to your project's `.cursor/rules/` (e.g. `.cursor/rules/mariachi.mdc`) so Cursor picks it up. Paths above are relative to your project root where `node_modules/@mariachi/core` is installed.

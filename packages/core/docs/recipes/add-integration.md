@@ -1,8 +1,6 @@
 # Recipe: Add a Third-Party Integration
 
-This walks through adding a new integration (e.g. GitHub, Twilio) using the `@mariachi/integrations` pattern. Integrations live in `integrations/<name>/` and follow a standard structure.
-
-The existing Slack integration (`integrations/slack/`) is used as the reference throughout.
+This walks through adding a new integration (e.g. GitHub, Twilio) using the `@mariachi/integrations` pattern.
 
 ---
 
@@ -19,17 +17,7 @@ integrations/<name>/
 
 ---
 
-## 1. Generate the Scaffold (Optional)
-
-```bash
-mariachi generate integration <name>
-```
-
-Or create the files manually following the structure above.
-
----
-
-## 2. Define Credentials
+## 1. Define Credentials
 
 Every integration has a Zod schema for its credentials. Never hardcode secrets.
 
@@ -48,11 +36,9 @@ export type GitHubCredentials = z.infer<typeof GitHubCredentials>;
 
 Store actual values via `@mariachi/config` (env variables), not in code.
 
-**Reference:** `integrations/slack/credentials.ts`
-
 ---
 
-## 3. Define Input/Output Types
+## 2. Define Input/Output Types
 
 Use Zod schemas for all inputs and outputs.
 
@@ -78,13 +64,11 @@ export type CreateIssueInput = z.infer<typeof CreateIssueInput>;
 export type CreateIssueOutput = z.infer<typeof CreateIssueOutput>;
 ```
 
-**Reference:** `integrations/slack/types.ts`
-
 ---
 
-## 4. Implement the Client
+## 3. Implement the Client
 
-The client is a thin wrapper around the external API. It receives validated credentials and input.
+The client is a thin wrapper around the external API.
 
 **File:** `integrations/<name>/client.ts`
 
@@ -117,13 +101,11 @@ export async function createIssue(
 }
 ```
 
-**Reference:** `integrations/slack/client.ts`
-
 ---
 
-## 5. Define the Integration Function
+## 4. Define the Integration Function
 
-Use `defineIntegrationFn` from `@mariachi/integrations` to wrap the client call with schema validation, retry config, and context.
+Use `defineIntegrationFn` from `@mariachi/integrations`.
 
 **File:** `integrations/<name>/index.ts`
 
@@ -154,16 +136,14 @@ export const githubCreateIssue = defineIntegrationFn<CreateIssueInput, CreateIss
 ```
 
 **Key fields:**
-- `name` -- unique identifier, conventionally `<provider>.<action>`
-- `input` / `output` -- Zod schemas for validation
-- `handler` -- receives validated input and `IntegrationContext` (with credentials)
-- `retry` -- optional retry config (`attempts`, `backoff: 'exponential' | 'fixed'`)
-
-**Reference:** `integrations/slack/index.ts`
+- `name` — unique identifier, conventionally `<provider>.<action>`
+- `input` / `output` — Zod schemas for validation
+- `handler` — receives validated input and `IntegrationContext` (with credentials)
+- `retry` — optional retry config
 
 ---
 
-## 6. Register in the Registry (Optional)
+## 5. Register in the Registry (Optional)
 
 For discoverability, register the integration in a central registry.
 
@@ -172,7 +152,6 @@ import { IntegrationRegistry } from '@mariachi/integrations';
 import { GitHubCredentials } from './credentials';
 
 const registry = new IntegrationRegistry();
-
 registry.register({
   name: 'github',
   description: 'GitHub integration for issues and repositories',
@@ -183,9 +162,7 @@ registry.register({
 
 ---
 
-## 7. Add a Test
-
-Write a dry-run test that validates credentials and input without calling the real API.
+## 6. Add a Test
 
 **File:** `integrations/<name>/test.ts`
 
@@ -207,8 +184,6 @@ export async function dryRun(
   };
 }
 ```
-
-**Reference:** `integrations/slack/test.ts`
 
 ---
 

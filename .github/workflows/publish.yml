@@ -31,6 +31,14 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Check npm auth
+        run: |
+          if [ -z "${{ secrets.NPM_TOKEN }}" ]; then
+            echo "::error::NPM_TOKEN secret is not set. Add an npm access token at: https://www.npmjs.com/settings/~/tokens (Automation type). Then in this repo: Settings → Secrets and variables → Actions → New repository secret, name NPM_TOKEN."
+            exit 1
+          fi
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> "$HOME/.npmrc"
+
       - name: Publish packages to npm
         run: pnpm --filter "./packages/*" -r publish --no-git-checks --access public
         env:
