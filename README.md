@@ -82,6 +82,51 @@ See [`docs/runbook.md`](docs/runbook.md) for the full list.
 
 ---
 
+## Using Mariachi in other projects
+
+You can consume Mariachi as an external library in two ways.
+
+### From npm (for published releases)
+
+Publish packages from this repo to npm, then install in any project:
+
+```bash
+pnpm add @mariachi/core @mariachi/config @mariachi/auth
+```
+
+To publish (from this repo, after `pnpm build`):
+
+```bash
+pnpm -r publish --no-git-checks
+```
+
+Publish only changed packages, or use a tool like [Changesets](https://github.com/changesets/changesets) to version and publish. All `@mariachi/*` packages have `publishConfig.access: "public"` for scoped public npm publishing.
+
+### Local development with pnpm link (your own projects)
+
+To work on Mariachi and a consuming app on the same machine with instant updates:
+
+**In the Mariachi repo** (from root, link each package your app uses):
+
+```bash
+pnpm build
+pnpm --filter @mariachi/core link --global
+pnpm --filter @mariachi/config link --global
+# ... repeat for each @mariachi/* package your app depends on
+```
+
+**In your other project:**
+
+```bash
+pnpm link --global @mariachi/core
+pnpm link --global @mariachi/config
+# ... for each linked package
+```
+
+Your app will use the linked packages from this repo; rebuild Mariachi (`pnpm build` or `pnpm dev` in the package) to see changes. To switch back to npm versions, run `pnpm unlink @mariachi/core` (etc.) and reinstall.
+
+---
+
 ## Project Structure
 
 ```

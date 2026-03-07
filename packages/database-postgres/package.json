@@ -13,6 +13,9 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
