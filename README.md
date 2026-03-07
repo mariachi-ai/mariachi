@@ -94,13 +94,20 @@ Publish packages from this repo to npm, then install in any project:
 pnpm add @mariachi/core @mariachi/config @mariachi/auth
 ```
 
-To publish (from this repo, after `pnpm build`):
+**Automatic publish on push to main:** A GitHub Action (`.github/workflows/publish.yml`) runs on every push to `main`. It bumps the patch version (from the latest published `@mariachi/core` on npm), builds, and publishes all packages under `packages/` to the public npm registry. To enable it:
+
+1. Create an [npm access token](https://www.npmjs.com/settings/~/tokens) (automation type is fine).
+2. In your GitHub repo: **Settings → Secrets and variables → Actions**, add a secret named `NPM_TOKEN` with the token value.
+
+After that, every push to `main` will publish a new patch version and commit the version bump back to `main`.
+
+**Manual publish** (from this repo, after `pnpm build`):
 
 ```bash
-pnpm -r publish --no-git-checks
+pnpm --filter "./packages/*" -r publish --no-git-checks --access public
 ```
 
-Publish only changed packages, or use a tool like [Changesets](https://github.com/changesets/changesets) to version and publish. All `@mariachi/*` packages have `publishConfig.access: "public"` for scoped public npm publishing.
+All `@mariachi/*` packages have `publishConfig.access: "public"` for scoped public npm publishing.
 
 ### Local development with pnpm link (your own projects)
 
