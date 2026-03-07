@@ -1,0 +1,1 @@
+{"version":3,"file":"messagePrecheckOut.js","sourceRoot":"","sources":["../../src/models/messagePrecheckOut.ts"],"names":[],"mappings":";;;AAOa,QAAA,4BAA4B,GAAG;IAC1C,eAAe,CAAC,MAAW;QACzB,OAAO;YACL,MAAM,EAAE,MAAM,CAAC,QAAQ,CAAC;SACzB,CAAC;IACJ,CAAC;IAED,aAAa,CAAC,IAAwB;QACpC,OAAO;YACL,MAAM,EAAE,IAAI,CAAC,MAAM;SACpB,CAAC;IACJ,CAAC;CACF,CAAC"}

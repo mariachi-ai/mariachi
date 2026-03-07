@@ -1,0 +1,39 @@
+{
+  "name": "@mariachi/schema",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@mariachi/audit": "workspace:*",
+    "@mariachi/auth": "workspace:*",
+    "@mariachi/ai": "workspace:*",
+    "@mariachi/billing": "workspace:*",
+    "@mariachi/config": "workspace:*",
+    "@mariachi/database": "workspace:*",
+    "@mariachi/notifications": "workspace:*",
+    "@mariachi/webhooks": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7",
+    "tsup": "^8"
+  }
+}

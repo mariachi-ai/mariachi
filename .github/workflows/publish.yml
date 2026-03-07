@@ -43,7 +43,7 @@ jobs:
         run: node scripts/publish-with-delay.mjs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_PUBLISH_DELAY_SECONDS: "5"
+          NPM_PUBLISH_DELAY_SECONDS: "10"
 
       - name: Commit and push version bump
         run: |

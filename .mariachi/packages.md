@@ -25,7 +25,8 @@ Quick reference for all 28 packages. Use this to decide which package to reach f
 | Package | Use when you need... | Factory / Entry |
 |---------|---------------------|-----------------|
 | `@mariachi/database` | Schema definitions, repository interface, types | `defineTable()`, `column`, `Database` |
-| `@mariachi/database-postgres` | PostgreSQL + Drizzle ORM implementation | `createPostgresDatabase()`, `DrizzleRepository` |
+| `@mariachi/schema` | All framework table definitions in one place (backend-agnostic) | Import `*Table` from here; use `compileTable()` from database-postgres in app for Drizzle |
+| `@mariachi/database-postgres` | PostgreSQL + Drizzle (users/tenants + compileTable, DrizzleRepository) | `createPostgresDatabase()`, `compileTable()`, `DrizzleRepository` |
 | `@mariachi/cache` | Redis caching, distributed locks, memoization | `createCache()`, `createLock()` |
 | `@mariachi/storage` | File/object storage (S3, local) | `Storage`, `DefaultStorage` |
 

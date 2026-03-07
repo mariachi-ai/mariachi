@@ -180,7 +180,8 @@ Mariachi ships 28 packages organized into six categories. Each package follows t
 | Package | What it gives you |
 |---------|-------------------|
 | `@mariachi/database` | Schema DSL (`defineTable`, `column`), repository interface, query filters, pagination types |
-| `@mariachi/database-postgres` | PostgreSQL + Drizzle ORM implementation, `DrizzleRepository` base class with tenant isolation and soft deletes |
+| `@mariachi/schema` | Backend-agnostic bundle of all framework table definitions (auth, billing, ai, etc.); compile to Drizzle in your app with `compileTable` from database-postgres |
+| `@mariachi/database-postgres` | PostgreSQL + Drizzle: `createPostgresDatabase`, `compileTable`, `DrizzleRepository`; exports compiled `users` and `tenants` only (use `@mariachi/schema` + `compileTable` for other tables) |
 | `@mariachi/cache` | Redis caching with `getOrSet`, key builders, distributed locks, memoization |
 | `@mariachi/storage` | File/object storage abstraction (S3, local filesystem) |
 

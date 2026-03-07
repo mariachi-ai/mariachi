@@ -17,33 +17,8 @@ export { DrizzleRepository as BaseRepository } from './repositories/drizzle.repo
 /** @deprecated Use `DrizzleRepositoryOptions` instead. */
 export type { DrizzleRepositoryOptions as BaseRepositoryOptions } from './repositories/drizzle.repository';
 
-// Compiled schemas (all 24 tables)
-export {
-  users,
-  tenants,
-  roles,
-  permissions,
-  userRoles,
-  apiKeys,
-  sessions,
-  billingCustomers,
-  billingSubscriptions,
-  billingCharges,
-  billingRefunds,
-  billingCreditTransactions,
-  billingUsageRecords,
-  billingWebhookEvents,
-  billingPlans,
-  aiSessions,
-  aiMessages,
-  aiTelemetry,
-  notifications,
-  notificationPreferences,
-  notificationDeliveries,
-  featureFlags,
-  auditLogs,
-  webhookLogs,
-} from './compiled-schemas';
+// Compiled schemas (core tables only; other domains: use @mariachi/schema + compileTable in app, or @mariachi/schema-postgres)
+export { users, tenants } from './compiled-schemas';
 
 // Seed
 export { runSeed } from './seed/index';

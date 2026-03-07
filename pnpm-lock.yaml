@@ -553,33 +553,12 @@ importers:
 
   packages/database-postgres:
     dependencies:
-      '@mariachi/ai':
-        specifier: workspace:*
-        version: link:../ai
-      '@mariachi/audit':
-        specifier: workspace:*
-        version: link:../audit
-      '@mariachi/auth':
-        specifier: workspace:*
-        version: link:../auth
-      '@mariachi/billing':
-        specifier: workspace:*
-        version: link:../billing
-      '@mariachi/config':
-        specifier: workspace:*
-        version: link:../config
       '@mariachi/core':
         specifier: workspace:*
         version: link:../core
       '@mariachi/database':
         specifier: workspace:*
         version: link:../database
-      '@mariachi/notifications':
-        specifier: workspace:*
-        version: link:../notifications
-      '@mariachi/webhooks':
-        specifier: workspace:*
-        version: link:../webhooks
       drizzle-orm:
         specifier: ^0.38
         version: 0.38.4(@opentelemetry/api@1.9.0)(@types/pg@8.6.1)(postgres@3.4.8)(react@19.2.4)
@@ -748,6 +727,40 @@ importers:
       '@types/ws':
         specifier: ^8
         version: 8.18.1
+      tsup:
+        specifier: ^8
+        version: 8.5.1(postcss@8.5.6)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+
+  packages/schema:
+    dependencies:
+      '@mariachi/ai':
+        specifier: workspace:*
+        version: link:../ai
+      '@mariachi/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@mariachi/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@mariachi/billing':
+        specifier: workspace:*
+        version: link:../billing
+      '@mariachi/config':
+        specifier: workspace:*
+        version: link:../config
+      '@mariachi/database':
+        specifier: workspace:*
+        version: link:../database
+      '@mariachi/notifications':
+        specifier: workspace:*
+        version: link:../notifications
+      '@mariachi/webhooks':
+        specifier: workspace:*
+        version: link:../webhooks
+    devDependencies:
       tsup:
         specifier: ^8
         version: 8.5.1(postcss@8.5.6)(typescript@5.9.3)

@@ -23,15 +23,8 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@mariachi/ai": "workspace:*",
-    "@mariachi/audit": "workspace:*",
-    "@mariachi/auth": "workspace:*",
-    "@mariachi/billing": "workspace:*",
-    "@mariachi/config": "workspace:*",
     "@mariachi/core": "workspace:*",
     "@mariachi/database": "workspace:*",
-    "@mariachi/notifications": "workspace:*",
-    "@mariachi/webhooks": "workspace:*",
     "drizzle-orm": "^0.38",
     "postgres": "^3.4"
   },

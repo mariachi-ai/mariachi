@@ -30,7 +30,7 @@ export const ordersTable = defineTable('orders', {
 
 ## 2. Compile to Drizzle
 
-Add the compiled table for use with `@mariachi/database-postgres`.
+Add the compiled table for use with `@mariachi/database-postgres`. For framework tables (auth, billing, ai, etc.), import the table definitions from `@mariachi/schema` and compile them in the same file.
 
 **File:** e.g. `src/compiled-schemas.ts`
 
@@ -38,6 +38,11 @@ Add the compiled table for use with `@mariachi/database-postgres`.
 import { ordersTable } from './schema/orders';
 import { compileTable } from '@mariachi/database-postgres';
 export const orders = compileTable(ordersTable);
+
+// Optional: compile framework tables from @mariachi/schema
+// import { rolesTable, billingCustomersTable } from '@mariachi/schema';
+// export const roles = compileTable(rolesTable);
+// export const billingCustomers = compileTable(billingCustomersTable);
 ```
 
 ---
