@@ -40,9 +40,10 @@ jobs:
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> "$HOME/.npmrc"
 
       - name: Publish packages to npm
-        run: pnpm --filter "./packages/*" -r publish --no-git-checks --access public
+        run: node scripts/publish-with-delay.mjs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_PUBLISH_DELAY_SECONDS: "5"
 
       - name: Commit and push version bump
         run: |
