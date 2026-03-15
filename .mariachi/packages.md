@@ -42,6 +42,7 @@ Quick reference for all 28 packages. Use this to decide which package to reach f
 
 | Package | Use when you need... | Factory / Entry |
 |---------|---------------------|-----------------|
+| `@mariachi/encryption` | Field-level encryption for stored secrets (tokens, API keys) | `createEncryption()`, `Encryption`, `EncryptionAdapter` |
 | `@mariachi/auth` | JWT, API keys, OAuth, RBAC | `createAuth()`, `createAuthorization()` |
 | `@mariachi/auth-clerk` | Clerk authentication, webhook verification (Svix) | `createClerkAuth()`, `ClerkWebhookController` |
 | `@mariachi/tenancy` | Multi-tenant isolation (subdomain, header, JWT) | `createTenantResolver()`, `createTenancyMiddleware()` |

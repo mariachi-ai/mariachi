@@ -3,7 +3,7 @@ import { createContext } from '@mariachi/core';
 import { createLogger } from '@mariachi/observability';
 import { FastifyServerAdapter } from '@mariachi/server';
 import type { ServerConfig } from '@mariachi/server';
-import type { RateLimitConfig, RouteDefinition, AuthStrategy, HttpContext, HttpMiddleware, RequestIdentity } from './types';
+import type { RateLimitConfig, RouteDefinition, AuthStrategy, HttpContext, HttpMiddleware, RequestIdentity, AuthResolver } from './types';
 import type { BaseController } from './controller';
 import { resolveAuth } from './auth/resolver';
 
@@ -11,6 +11,7 @@ export class FastifyAdapter {
   private readonly config: ServerConfig;
   private readonly server: FastifyServerAdapter;
   private authStrategies: AuthStrategy[] = [];
+  private customAuthResolver?: AuthResolver;
   private rateLimitConfig?: RateLimitConfig;
   private middlewares: HttpMiddleware[] = [];
   private routes: RouteDefinition[] = [];
@@ -29,6 +30,11 @@ export class FastifyAdapter {
 
   withRateLimit(config: RateLimitConfig): this {
     this.rateLimitConfig = config;
+    return this;
+  }
+
+  withAuthResolver(resolver: AuthResolver): this {
+    this.customAuthResolver = resolver;
     return this;
   }
 
@@ -63,7 +69,9 @@ export class FastifyAdapter {
           let identity: RequestIdentity | null = null;
 
           if (routeAuth.length > 0) {
-            const resolved = resolveAuth(req, routeAuth);
+            const resolved = this.customAuthResolver
+              ? await Promise.resolve(this.customAuthResolver(req, routeAuth))
+              : resolveAuth(req, routeAuth);
             if (!resolved) {
               throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
             }

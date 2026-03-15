@@ -8,6 +8,7 @@ export type {
   RequestIdentity,
   HttpContext,
   HttpMiddleware,
+  AuthResolver,
 } from './types';
 export { BaseController } from './controller';
 export type { RouteOpts, RouteHandler } from './controller';

@@ -52,7 +52,8 @@ export class BullMQAdapter implements JobQueue, JobWorker, JobScheduler {
   }
 
   private getQueueName() {
-    return `${this.config.prefix ?? 'mariachi'}:jobs`;
+    // BullMQ queue name cannot contain ':' — use hyphen so Redis key prefix stays separate
+    return `${this.config.prefix ?? 'mariachi'}-jobs`;
   }
 
   async connect(): Promise<void> {

@@ -417,6 +417,25 @@ importers:
         specifier: ^1
         version: 1.86.0
 
+  packages/auth-fusionauth:
+    dependencies:
+      '@mariachi/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@mariachi/core':
+        specifier: workspace:*
+        version: link:../core
+      jose:
+        specifier: ^6
+        version: 6.2.1
+    devDependencies:
+      tsup:
+        specifier: ^8
+        version: 8.5.1(postcss@8.5.6)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+
   packages/billing:
     dependencies:
       '@mariachi/core':
@@ -3241,6 +3260,9 @@ packages:
   isexe@3.1.5:
     resolution: {integrity: sha512-6B3tLtFqtQS4ekarvLVMZ+X+VlvQekbe4taUkf/rhVO3d/h0M2rfARm/pXLcPEsjjMsFgrFgSrhQIxcSVrBz8w==}
     engines: {node: '>=18'}
+
+  jose@6.2.1:
+    resolution: {integrity: sha512-jUaKr1yrbfaImV7R2TN/b3IcZzsw38/chqMpo2XJ7i2F8AfM/lA4G1goC3JVEwg0H7UldTmSt3P68nt31W7/mw==}
 
   joycon@3.1.1:
     resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
@@ -7117,6 +7139,8 @@ snapshots:
   is-stream@2.0.1: {}
 
   isexe@3.1.5: {}
+
+  jose@6.2.1: {}
 
   joycon@3.1.1: {}
 

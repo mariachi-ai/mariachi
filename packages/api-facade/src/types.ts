@@ -27,6 +27,11 @@ export type HttpMiddleware = (
   next: () => Promise<void>,
 ) => Promise<void>;
 
+export type AuthResolver = (
+  req: import('@mariachi/server').IncomingRequest,
+  strategies: AuthStrategy[],
+) => Promise<ResolvedIdentity | null> | ResolvedIdentity | null;
+
 export interface RouteDefinition {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   path: string;

@@ -43,6 +43,7 @@ Quick reference for all 28 packages. Use this to decide which package to reach f
 |---------|---------------------|-----------------|
 | `@mariachi/auth` | JWT, API keys, OAuth, RBAC | `createAuth()`, `createAuthorization()` |
 | `@mariachi/auth-clerk` | Clerk authentication, webhook verification (Svix) | `createClerkAuth()`, `ClerkWebhookController` |
+| `@mariachi/auth-fusionauth` | FusionAuth JWT + webhook verification (JWKS / HMAC or PEM) | `createFusionAuthAuth()`, `FusionAuthWebhookHandler` |
 | `@mariachi/tenancy` | Multi-tenant isolation (subdomain, header, JWT) | `createTenantResolver()`, `createTenancyMiddleware()` |
 | `@mariachi/rate-limit` | Redis sliding-window rate limiting | `createRateLimiter()` |
 

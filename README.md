@@ -199,6 +199,7 @@ Mariachi ships 28 packages organized into six categories. Each package follows t
 |---------|-------------------|
 | `@mariachi/auth` | JWT authentication, API key management, OAuth flows, RBAC authorization, brute-force protection |
 | `@mariachi/auth-clerk` | Clerk authentication adapter, webhook verification (Svix), middleware, and webhook controller |
+| `@mariachi/auth-fusionauth` | FusionAuth JWT verification (JWKS), webhook verification (HMAC or PEM) |
 | `@mariachi/tenancy` | Multi-tenant isolation via subdomain, header, or JWT claim resolution |
 | `@mariachi/rate-limit` | Redis sliding-window rate limiting with per-user and per-key rules |
 

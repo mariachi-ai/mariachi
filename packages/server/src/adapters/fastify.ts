@@ -4,7 +4,7 @@ import type { Logger } from '@mariachi/core';
 import { MariachiError, errorToHttpStatus } from '@mariachi/core';
 import { createLogger } from '@mariachi/observability';
 import type { ServerAdapter, ServerConfig, ServerRoute, ServerMiddleware, RequestContext, IncomingRequest } from '../types';
-import { contextPlugin } from '../plugins/context';
+import '../plugins/context'; // type augmentation for FastifyRequest.serverCtx
 import { tracingPlugin } from '../plugins/tracing';
 
 const rawBodyStore = new WeakMap<object, string>();
@@ -49,10 +49,16 @@ export class FastifyServerAdapter implements ServerAdapter {
       }
     });
 
-    await fastify.register(contextPlugin, {
-      logger: this.logger,
-      serverName: this.config.name,
-      getTraceId: (req) => (req.headers['x-trace-id'] as string) ?? crypto.randomUUID(),
+    // Set serverCtx on the same fastify instance that has routes (avoid encapsulation so hook runs for all routes)
+    const getTraceId = (req: FastifyRequest) => (req.headers['x-trace-id'] as string) ?? crypto.randomUUID();
+    fastify.addHook('preHandler', async (req: FastifyRequest, _reply: FastifyReply) => {
+      const traceId = getTraceId(req);
+      const logger = this.logger.child({ traceId });
+      req.serverCtx = {
+        traceId,
+        logger,
+        server: this.config.name,
+      };
     });
 
     await fastify.register(tracingPlugin);
