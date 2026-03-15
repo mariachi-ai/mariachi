@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/encryption",
-  "version": "0.1.0",
+  "version": "0.0.4",
   "type": "module",
   "exports": {
     ".": {
@@ -12,7 +12,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -30,8 +32,12 @@
     "@google-cloud/kms": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "@aws-sdk/client-kms": { "optional": true },
-    "@google-cloud/kms": { "optional": true }
+    "@aws-sdk/client-kms": {
+      "optional": true
+    },
+    "@google-cloud/kms": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@aws-sdk/client-kms": "^3.700.0",
