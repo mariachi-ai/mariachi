@@ -6,6 +6,7 @@ export { AuthController } from './auth/auth-controller';
 export type { WebhookIdentity } from './auth/auth-controller';
 export { OAuthAuthController } from './auth/oauth';
 export { ApiKeyAuthController } from './auth/api-key';
+export { SignatureAuthController } from './auth/signature';
 export type { WebhookLogEntry, WebhookLogStore, WebhookLogStatus, WebhookLogIdentity } from './logging/types';
 export { RepositoryWebhookLogStore } from './logging/repository-log-store';
 export * from './schema/index';

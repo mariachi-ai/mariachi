@@ -7,6 +7,8 @@ import type { ServerAdapter, ServerConfig, ServerRoute, ServerMiddleware, Reques
 import { contextPlugin } from '../plugins/context';
 import { tracingPlugin } from '../plugins/tracing';
 
+const rawBodyStore = new WeakMap<object, string>();
+
 export class FastifyServerAdapter implements ServerAdapter {
   private readonly config: ServerConfig;
   private readonly middlewares: ServerMiddleware[] = [];
@@ -32,6 +34,19 @@ export class FastifyServerAdapter implements ServerAdapter {
   async listen(port: number): Promise<void> {
     const fastify = Fastify({
       trustProxy: this.config.trustProxy,
+    });
+
+    // Preserve raw body for signature verification (e.g. webhook HMAC).
+    // We store the raw string in a WeakMap keyed by the raw request object
+    // so it survives content-type parsing without augmenting Fastify's types.
+    fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+      const raw = typeof body === 'string' ? body : body.toString('utf8');
+      rawBodyStore.set(req, raw);
+      try {
+        done(null, JSON.parse(raw));
+      } catch (e) {
+        done(e as Error, undefined);
+      }
     });
 
     await fastify.register(contextPlugin, {
@@ -60,6 +75,7 @@ export class FastifyServerAdapter implements ServerAdapter {
           const incoming: IncomingRequest = {
             headers: req.headers as Record<string, string | string[] | undefined>,
             body: (req as FastifyRequest<{ Body?: unknown }>).body,
+            rawBody: rawBodyStore.get(req.raw),
             params: (req.params as Record<string, string>) ?? {},
             query: (req.query as Record<string, string>) ?? {},
             method: req.method,

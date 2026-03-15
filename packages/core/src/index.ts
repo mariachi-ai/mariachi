@@ -22,6 +22,7 @@ export {
   AuditError,
   AIError,
   IntegrationError,
+  EncryptionError,
   LifecycleError,
   errorToHttpStatus,
 } from './errors';

@@ -17,6 +17,8 @@ export interface RequestContext {
 export interface IncomingRequest {
   headers: Record<string, string | string[] | undefined>;
   body: unknown;
+  /** Raw request body for signature verification (e.g. HMAC). Set when content-type parser preserves it. */
+  rawBody?: string | Buffer;
   params: Record<string, string>;
   query: Record<string, string>;
   method: string;

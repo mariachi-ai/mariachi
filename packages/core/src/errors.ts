@@ -121,6 +121,13 @@ export class IntegrationError extends MariachiError {
   }
 }
 
+export class EncryptionError extends MariachiError {
+  constructor(code: string, message: string, metadata?: Record<string, unknown>) {
+    super(code, message, metadata);
+    this.name = 'EncryptionError';
+  }
+}
+
 export class LifecycleError extends MariachiError {
   constructor(code: string, message: string, metadata?: Record<string, unknown>) {
     super(code, message, metadata);
