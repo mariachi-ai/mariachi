@@ -1,19 +1,43 @@
 {
   "name": "@mariachi/auth",
   "version": "0.0.5",
+  "description": "JWT, OAuth, sessions, API keys with rotation and scopes, database-backed RBAC and brute-force protection.",
+  "mariachi": {
+    "category": "security",
+    "status": "beta",
+    "useWhen": "Authenticating callers and checking permissions",
+    "entry": [
+      "createAuth",
+      "createAuthorization",
+      "ApiKeyService",
+      "DrizzleRoleStore",
+      "JWTAdapter"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js",
+      "require": "./dist/schema.cjs"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "import": "./dist/postgres.js",
+      "require": "./dist/postgres.cjs"
     }
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -22,7 +46,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*",
@@ -30,10 +58,26 @@
     "@mariachi/communication": "workspace:*",
     "@mariachi/database": "workspace:*",
     "jsonwebtoken": "^9",
-    "@types/jsonwebtoken": "^9"
+    "zod": "^3"
+  },
+  "peerDependencies": {
+    "@mariachi/database-postgres": "workspace:*",
+    "drizzle-orm": "^0.38"
+  },
+  "peerDependenciesMeta": {
+    "@mariachi/database-postgres": {
+      "optional": true
+    },
+    "drizzle-orm": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@mariachi/database-postgres": "workspace:*",
+    "drizzle-orm": "^0.38",
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3",
+    "@types/jsonwebtoken": "^9"
   }
 }

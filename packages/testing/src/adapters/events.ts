@@ -1,57 +1,43 @@
-import type { EventBus, EventHandler, TypedEvent } from '../types';
+import type { BusSubscription, DeliveryInfo, EnvelopeHandler, EventBus, EventEnvelope } from '@mariachi/events';
 
 export interface PublishedEvent<T = unknown> {
   eventName: string;
   payload: T;
-  envelope: TypedEvent<T>;
+  envelope: EventEnvelope<T>;
 }
 
 export class TestEventBus implements EventBus {
-  private readonly handlers = new Map<string, Set<EventHandler<unknown>>>();
+  readonly name = 'test';
+  readonly guarantee = 'at-most-once' as const;
+  private readonly handlers = new Map<string, Set<EnvelopeHandler>>();
   private readonly published: PublishedEvent[] = [];
 
   async connect(): Promise<void> {}
+  async disconnect(): Promise<void> { this.handlers.clear(); }
+  async isHealthy(): Promise<boolean> { return true; }
 
-  async disconnect(): Promise<void> {
-    this.handlers.clear();
+  async publish<T>(envelope: EventEnvelope<T>): Promise<void> {
+    this.published.push({ eventName: envelope.type, payload: envelope.payload, envelope });
+    const set = this.handlers.get(envelope.type);
+    if (!set) return;
+    const delivery: DeliveryInfo = { attempt: 1 };
+    for (const handler of set) await handler(envelope, delivery);
   }
 
-  async publish<T>(eventName: string, payload: T): Promise<void> {
-    const envelope: TypedEvent<T> = {
-      type: eventName,
-      payload,
-      occurredAt: new Date().toISOString(),
-    };
-    this.published.push({ eventName, payload, envelope });
-
-    const set = this.handlers.get(eventName);
-    if (!set?.size) return;
-    for (const handler of set) {
-      try {
-        await handler(envelope.payload, undefined);
-      } catch {
-        // catch errors per handler
-      }
-    }
-  }
-
-  subscribe<T>(eventName: string, handler: EventHandler<T>): void {
-    let set = this.handlers.get(eventName) as Set<EventHandler<T>> | undefined;
+  subscribe(eventName: string, handler: EnvelopeHandler): BusSubscription {
+    let set = this.handlers.get(eventName);
     if (!set) {
       set = new Set();
-      this.handlers.set(eventName, set as Set<EventHandler<unknown>>);
+      this.handlers.set(eventName, set);
     }
-    set.add(handler as EventHandler<T>);
+    set.add(handler);
+    return {
+      ready: Promise.resolve(),
+      unsubscribe: async () => { set?.delete(handler); },
+    };
   }
 
-  unsubscribe(eventName: string, handler: EventHandler): void {
-    const set = this.handlers.get(eventName);
-    if (!set) return;
-    set.delete(handler);
-    if (set.size === 0) this.handlers.delete(eventName);
-  }
-
-  getPublishedEvents<T = unknown>(): PublishedEvent<T>[] {
+  getPublished<T = unknown>(): PublishedEvent<T>[] {
     return [...this.published] as PublishedEvent<T>[];
   }
 }

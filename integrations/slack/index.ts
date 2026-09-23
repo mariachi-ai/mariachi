@@ -1,12 +1,15 @@
-import { defineIntegrationFn } from '@mariachi/integrations';
+import { IntegrationError } from '@mariachi/core';
+import { defineIntegrationFn, resolveTenantCredential } from '@mariachi/integrations';
 import type { IntegrationContext } from '@mariachi/integrations';
 import { postMessage } from './client';
 import type { SlackCredentials } from './credentials';
 import { SendMessageInput, SendMessageOutput } from './types';
 
 export interface SlackIntegrationContext extends IntegrationContext {
-  credentials: SlackCredentials;
+  credentials: Pick<SlackCredentials, 'botToken'>;
 }
+
+export { verifySlackSignature, assertSlackSignature } from './verify';
 
 export const sendMessage = defineIntegrationFn<SendMessageInput, SendMessageOutput>({
   name: 'slack.sendMessage',
@@ -16,9 +19,13 @@ export const sendMessage = defineIntegrationFn<SendMessageInput, SendMessageOutp
     input: SendMessageInput,
     ctx: IntegrationContext
   ): Promise<SendMessageOutput> => {
-    const credentials = (ctx as SlackIntegrationContext).credentials;
+    let credentials = (ctx as SlackIntegrationContext).credentials;
+    if (!credentials && ctx.secrets) {
+      const botToken = await resolveTenantCredential(ctx, ctx.credentialKey ?? 'slack.botToken', ctx.secrets, ctx.decrypt);
+      credentials = { botToken };
+    }
     if (!credentials) {
-      throw new Error('Slack credentials required');
+      throw new IntegrationError('integrations/missing-credential', 'Slack credentials required');
     }
     return postMessage(credentials, input);
   },

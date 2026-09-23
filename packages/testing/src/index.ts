@@ -1,8 +1,10 @@
 export { TestCacheClient } from './adapters/cache';
+export { TestLock } from './adapters/lock';
 export { TestEventBus, type PublishedEvent } from './adapters/events';
 export { TestJobQueue, type EnqueuedJob } from './adapters/jobs';
 export { TestStorageClient } from './adapters/storage';
-export { TestEmailAdapter } from './adapters/notifications';
+export { TestEmailAdapter, TestSMSAdapter, TestPushAdapter, TestInAppStore } from './adapters/notifications';
+export { TestSearchClient } from './adapters/search';
 export { TestRepository } from './adapters/database';
 export { TestAISession } from './adapters/ai';
 
@@ -12,7 +14,8 @@ export { createTestContext } from './factories/context.factory';
 
 export { TestLogger, createTestSetup, type LogEntry, type TestSetup } from './setup';
 
-export { createTestHarness, type TestHarness } from './harness';
+export { createTestHarness, TestHarnessLogger, type TestHarness } from './harness';
+export { TestTracer, TestMetrics, type RecordedSpan, type RecordedMetric } from './adapters/observability';
 
 export type {
   CacheClient,
@@ -31,6 +34,6 @@ export type {
   ToolResult,
   AIResponse,
   AISession,
-  TypedEvent,
+  EventEnvelope,
 } from './types';
 export type { Entity, BaseEntity, PaginatedResult, PaginationParams, SortParams, FilterOp, FilterCondition, QueryFilter } from './types';

@@ -1,78 +1,92 @@
-import { Counter, Histogram, Gauge, Registry } from 'prom-client';
+import type { Counter, Gauge, Histogram, Registry } from 'prom-client';
+import { loadOptionalPeer } from '@mariachi/core';
 import type { MetricsAdapter } from '../../types';
 
+type PromClient = typeof import('prom-client');
+
+export interface MetricDefinition {
+  type: 'counter' | 'gauge' | 'histogram';
+  help?: string;
+  labelNames: string[];
+  buckets?: number[];
+}
+
+type AnyMetric = Counter | Gauge | Histogram;
+
+/**
+ * Labels are fixed per metric. Declare them up front with `define()`, or they are taken
+ * from the first call's tags. Later calls never throw: unknown labels are dropped and
+ * missing labels are filled with an empty string.
+ */
 export class PrometheusMetricsAdapter implements MetricsAdapter {
   readonly registry: Registry;
-  private readonly counters = new Map<string, Counter>();
-  private readonly gauges = new Map<string, Gauge>();
-  private readonly histograms = new Map<string, Histogram>();
+  private readonly prom: PromClient;
+  private readonly metrics = new Map<string, { metric: AnyMetric; labelNames: string[] }>();
+  private readonly definitions = new Map<string, MetricDefinition>();
+  private readonly prefix: string;
 
-  constructor(registry?: Registry) {
-    this.registry = registry ?? new Registry();
+  constructor(options: { registry?: Registry; prefix?: string; collectDefaultMetrics?: boolean } = {}) {
+    this.prom = loadOptionalPeer<PromClient>('prom-client', 'PrometheusMetricsAdapter', import.meta.url);
+    this.registry = options.registry ?? new this.prom.Registry();
+    this.prefix = options.prefix ?? '';
+    if (options.collectDefaultMetrics) this.prom.collectDefaultMetrics({ register: this.registry });
+  }
+
+  define(name: string, definition: MetricDefinition): this {
+    this.definitions.set(this.sanitize(name), definition);
+    return this;
   }
 
   increment(name: string, value = 1, tags?: Record<string, string>): void {
-    const counter = this.getOrCreateCounter(name);
-    if (tags && Object.keys(tags).length > 0) {
-      counter.inc(tags, value);
-    } else {
-      counter.inc(value);
-    }
+    const { metric, labels } = this.get('counter', name, tags);
+    (metric as Counter).inc(labels, value);
   }
 
   gauge(name: string, value: number, tags?: Record<string, string>): void {
-    const gauge = this.getOrCreateGauge(name);
-    if (tags && Object.keys(tags).length > 0) {
-      gauge.set(tags, value);
-    } else {
-      gauge.set(value);
-    }
+    const { metric, labels } = this.get('gauge', name, tags);
+    (metric as Gauge).set(labels, value);
   }
 
   histogram(name: string, value: number, tags?: Record<string, string>): void {
-    const histogram = this.getOrCreateHistogram(name);
-    if (tags && Object.keys(tags).length > 0) {
-      histogram.observe(tags, value);
-    } else {
-      histogram.observe(value);
-    }
+    const { metric, labels } = this.get('histogram', name, tags);
+    (metric as Histogram).observe(labels, value);
   }
 
   timing(name: string, value: number, tags?: Record<string, string>): void {
     this.histogram(`${name}_duration_ms`, value, tags);
   }
 
-  private getOrCreateCounter(name: string): Counter {
-    const sanitized = this.sanitizeName(name);
-    let counter = this.counters.get(sanitized);
-    if (!counter) {
-      counter = new Counter({ name: sanitized, help: sanitized, labelNames: ['key', 'event', 'procedure', 'action', 'resource', 'model', 'currency', 'index', 'metric_name', 'event_type', 'type', 'status'], registers: [this.registry] });
-      this.counters.set(sanitized, counter);
-    }
-    return counter;
+  async render(): Promise<string> {
+    return this.registry.metrics();
   }
 
-  private getOrCreateGauge(name: string): Gauge {
-    const sanitized = this.sanitizeName(name);
-    let gauge = this.gauges.get(sanitized);
-    if (!gauge) {
-      gauge = new Gauge({ name: sanitized, help: sanitized, labelNames: ['key', 'event', 'procedure', 'model'], registers: [this.registry] });
-      this.gauges.set(sanitized, gauge);
+  private get(type: MetricDefinition['type'], rawName: string, tags: Record<string, string> = {}) {
+    const name = this.sanitize(rawName);
+    const key = `${type}:${name}`;
+    let entry = this.metrics.get(key);
+    if (!entry) {
+      const def = this.definitions.get(name);
+      const labelNames = def?.labelNames ?? Object.keys(tags).map((k) => this.sanitize(k)).sort();
+      const config = { name: this.prefix + name, help: def?.help ?? name, labelNames, registers: [this.registry] };
+      const metric =
+        type === 'counter'
+          ? new this.prom.Counter(config)
+          : type === 'gauge'
+            ? new this.prom.Gauge(config)
+            : new this.prom.Histogram(def?.buckets ? { ...config, buckets: def.buckets } : config);
+      entry = { metric, labelNames };
+      this.metrics.set(key, entry);
     }
-    return gauge;
+    const labels: Record<string, string> = {};
+    for (const label of entry.labelNames) labels[label] = '';
+    for (const [k, v] of Object.entries(tags)) {
+      const label = this.sanitize(k);
+      if (label in labels) labels[label] = String(v);
+    }
+    return { metric: entry.metric, labels };
   }
 
-  private getOrCreateHistogram(name: string): Histogram {
-    const sanitized = this.sanitizeName(name);
-    let histogram = this.histograms.get(sanitized);
-    if (!histogram) {
-      histogram = new Histogram({ name: sanitized, help: sanitized, labelNames: ['key', 'event', 'procedure', 'action', 'model', 'currency', 'index'], registers: [this.registry] });
-      this.histograms.set(sanitized, histogram);
-    }
-    return histogram;
-  }
-
-  private sanitizeName(name: string): string {
+  private sanitize(name: string): string {
     return name.replace(/[^a-zA-Z0-9_]/g, '_');
   }
 }

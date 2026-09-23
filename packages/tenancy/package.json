@@ -1,6 +1,17 @@
 {
   "name": "@mariachi/tenancy",
   "version": "0.0.5",
+  "description": "Tenant resolution (subdomain, header, token) that fails closed.",
+  "mariachi": {
+    "category": "security",
+    "status": "beta",
+    "useWhen": "Multi-tenant apps resolving the tenant per request",
+    "entry": [
+      "createTenancy",
+      "createTenantResolver",
+      "createTenancyMiddleware"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -22,13 +33,18 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

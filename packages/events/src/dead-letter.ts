@@ -1,42 +1,46 @@
+import type Redis from 'ioredis';
 import type { Logger } from '@mariachi/core';
+import type { DeadLetter, DeadLetterSink } from './types';
 
-export interface DeadLetterConfig {
-  maxRetries: number;
-  retryDelayMs: number;
-}
+/** Keeps dead letters in memory. For tests and local development. */
+export class MemoryDeadLetterSink implements DeadLetterSink {
+  readonly entries: DeadLetter[] = [];
 
-export class DeadLetterHandler {
-  private readonly failed = new Map<string, { event: string; payload: unknown; error: Error; attempts: number }[]>();
-
-  constructor(
-    private readonly logger: Logger,
-    private readonly config: DeadLetterConfig = { maxRetries: 3, retryDelayMs: 1000 },
-  ) {}
-
-  async handle(eventName: string, payload: unknown, error: Error, handler: (payload: unknown) => Promise<void>): Promise<boolean> {
-    const key = `${eventName}:${JSON.stringify(payload)}`;
-    const entries = this.failed.get(key) ?? [];
-    const attempts = entries.length + 1;
-
-    if (attempts <= this.config.maxRetries) {
-      this.logger.warn({ event: eventName, attempt: attempts, error: error.message }, 'Retrying failed event handler');
-      await new Promise(resolve => setTimeout(resolve, this.config.retryDelayMs * attempts));
-      try {
-        await handler(payload);
-        this.failed.delete(key);
-        return true;
-      } catch (retryError) {
-        entries.push({ event: eventName, payload, error: retryError as Error, attempts });
-        this.failed.set(key, entries);
-        return false;
-      }
-    }
-
-    this.logger.error({ event: eventName, attempts, error: error.message }, 'Event sent to dead letter after max retries');
-    return false;
+  async send(entry: DeadLetter): Promise<void> {
+    this.entries.push(entry);
   }
 
-  getDeadLetters(): Array<{ event: string; payload: unknown; error: Error; attempts: number }> {
-    return Array.from(this.failed.values()).flat();
+  clear(): void {
+    this.entries.length = 0;
+  }
+}
+
+/** Only logs. The default, so failures are never silent. */
+export class LoggingDeadLetterSink implements DeadLetterSink {
+  constructor(private readonly logger: Logger) {}
+
+  async send(entry: DeadLetter): Promise<void> {
+    this.logger.error(
+      { event: entry.envelope.type, eventId: entry.envelope.id, subscriber: entry.subscriber, attempts: entry.attempts, error: entry.error },
+      'event dead-lettered',
+    );
+  }
+}
+
+/** Appends dead letters to a Redis stream (default `mariachi.events:dead-letter`) for inspection and replay. */
+export class RedisStreamDeadLetterSink implements DeadLetterSink {
+  constructor(
+    private readonly redis: Redis,
+    private readonly stream = 'mariachi.events:dead-letter',
+    private readonly maxLen = 100_000,
+  ) {}
+
+  async send(entry: DeadLetter): Promise<void> {
+    await this.redis.xadd(this.stream, 'MAXLEN', '~', String(this.maxLen), '*', 'd', JSON.stringify(entry));
+  }
+
+  async list(count = 100): Promise<DeadLetter[]> {
+    const rows = await this.redis.xrevrange(this.stream, '+', '-', 'COUNT', count);
+    return rows.map(([, fields]) => JSON.parse(fields[1] ?? '{}') as DeadLetter);
   }
 }

@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { NotificationError } from '@mariachi/core';
 import type { EmailAdapter, EmailMessage } from '../../types';
 
 export interface ResendEmailAdapterOptions {
@@ -18,7 +19,7 @@ export class ResendEmailAdapter implements EmailAdapter {
   async send(message: EmailMessage): Promise<{ id: string }> {
     const from = message.from ?? this.defaultFrom;
     if (!from) {
-      throw new Error('Email "from" is required');
+      throw new NotificationError('notifications/invalid-input', 'Email "from" is required');
     }
     const to = Array.isArray(message.to) ? message.to : [message.to];
     const payload = {
@@ -35,10 +36,10 @@ export class ResendEmailAdapter implements EmailAdapter {
           : { ...payload, text: message.text ?? '' };
     const { data, error } = await this.resend.emails.send(withContent);
     if (error) {
-      throw error;
+      throw new NotificationError('notifications/provider-failed', `Resend: ${error.message}`, { provider: 'resend', name: error.name });
     }
     if (!data?.id) {
-      throw new Error('Resend did not return an id');
+      throw new NotificationError('notifications/provider-failed', 'Resend did not return an id', { provider: 'resend' });
     }
     return { id: data.id };
   }

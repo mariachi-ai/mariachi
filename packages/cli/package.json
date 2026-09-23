@@ -1,6 +1,13 @@
 {
   "name": "@mariachi/cli",
   "version": "0.0.5",
+  "description": "The mariachi binary: init, generate, validate and db (generate, check, migrate, seed).",
+  "mariachi": {
+    "category": "tooling",
+    "status": "beta",
+    "useWhen": "Creating projects, generating code, running migrations",
+    "entry": []
+  },
   "type": "module",
   "bin": {
     "mariachi": "./dist/index.js"
@@ -21,14 +28,27 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@mariachi/config": "workspace:*",
+    "@mariachi/core": "workspace:*",
     "@mariachi/create": "workspace:*",
-    "commander": "^13"
+    "@mariachi/database": "workspace:*",
+    "@mariachi/database-postgres": "workspace:*",
+    "commander": "^13",
+    "drizzle-kit": "^0.30",
+    "jiti": "^2.4"
   },
   "devDependencies": {
+    "drizzle-orm": "^0.38",
+    "postgres": "^3.4",
+    "tsup": "^8",
     "typescript": "^5.7",
-    "tsup": "^8"
+    "vitest": "^3"
   }
 }

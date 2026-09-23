@@ -6,14 +6,18 @@ export type {
   ObservabilityConfig,
 } from './types';
 
-export { PinoLoggerAdapter } from './adapters/logging/pino';
+export { PinoLoggerAdapter, contextBindings, type PinoLoggerOptions } from './adapters/logging/pino';
 export { ConsoleLoggerAdapter } from './adapters/logging/console';
 export { NoopTracerAdapter } from './adapters/tracing/noop';
 export { NoopMetricsAdapter } from './adapters/metrics/noop';
 export { NoopErrorTracker } from './adapters/errors/noop';
 
-export { OpenTelemetryTracerAdapter } from './adapters/tracing/opentelemetry';
-export { PrometheusMetricsAdapter } from './adapters/metrics/prometheus';
+export {
+  OpenTelemetryTracerAdapter,
+  setupOpenTelemetry,
+  type OpenTelemetrySetupOptions,
+} from './adapters/tracing/opentelemetry';
+export { PrometheusMetricsAdapter, type MetricDefinition } from './adapters/metrics/prometheus';
 export { SentryErrorTracker } from './adapters/errors/sentry';
 
 export { createLogger } from './logger';
@@ -28,15 +32,17 @@ import { createTracer } from './tracer';
 import { createMetrics } from './metrics';
 import { createErrorTracker } from './errors';
 
-export function createObservability(config?: ObservabilityConfig): {
+export interface Observability {
   logger: Logger;
   tracer: TracerAdapter;
   metrics: MetricsAdapter;
   errors: ErrorTracker;
-} {
+}
+
+export function createObservability(config?: ObservabilityConfig): Observability {
   return {
     logger: createLogger(config?.logging),
-    tracer: createTracer(config?.tracing),
+    tracer: createTracer({ serviceName: config?.serviceName, ...config?.tracing }),
     metrics: createMetrics(config?.metrics),
     errors: createErrorTracker(config?.errors),
   };

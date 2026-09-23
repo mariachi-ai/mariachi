@@ -1,110 +1,70 @@
-# Mariachi Framework Architecture
+# Architecture
 
-Mariachi is an LLM-optimized TypeScript backend framework with adapter-based abstractions. It provides a modular structure where external dependencies (databases, caches, message queues, third-party APIs) are hidden behind config-driven adapters, enabling vendor independence and testability.
+## Layers
 
-## Three-Layer Architecture
-
-Requests flow through three layers: **Facade** (HTTP/entry), **Controller** (routing and validation), and **Service** (business logic). Controllers delegate to services via the communication layer.
-
-```mermaid
-flowchart TB
-    subgraph Facade
-        HTTP[HTTP Request]
-        Fastify[FastifyAdapter]
-        Auth[Auth Strategies]
-        RateLimit[Rate Limiting]
-    end
-
-    subgraph Controller
-        Ctrl[Controller]
-        Validation[Input Validation]
-    end
-
-    subgraph Communication
-        Comm[Communication Layer]
-        Middleware[Middleware Pipeline]
-    end
-
-    subgraph Service
-        Svc[Service]
-        BusinessLogic[Business Logic]
-    end
-
-    HTTP --> Fastify
-    Fastify --> Auth
-    Auth --> RateLimit
-    RateLimit --> Ctrl
-    Ctrl --> Validation
-    Validation --> Comm
-    Comm --> Middleware
-    Middleware --> Svc
-    Svc --> BusinessLogic
-```
-
-| Layer | Responsibility |
-|-------|----------------|
-| **Facade** | HTTP server (Fastify), auth strategies, rate limiting, route registration |
-| **Controller** | Parse/validate input, call communication layer, return response |
-| **Service** | Business logic, database access, external integrations |
-
-## Package Overview
-
-| Package | Purpose |
-|---------|---------|
-| `@mariachi/core` | Shared types, errors, context, container |
-| `@mariachi/config` | Typed config, secrets, feature flags |
-| `@mariachi/observability` | Logging (Pino), tracing (OTEL), metrics, error tracking |
-| `@mariachi/lifecycle` | Startup/shutdown, health checks, bootstrap |
-| `@mariachi/communication` | Inter-module communication, middleware pipeline |
-| `@mariachi/database` | Drizzle ORM, PostgreSQL, repositories |
-| `@mariachi/cache` | Redis, in-memory, distributed locks |
-| `@mariachi/events` | Event bus, Redis Pub/Sub |
-| `@mariachi/jobs` | BullMQ job queue, workers, scheduler |
-| `@mariachi/auth` | JWT, API keys, RBAC |
-| `@mariachi/tenancy` | Multi-tenant isolation |
-| `@mariachi/rate-limit` | Redis sliding window rate limiting |
-| `@mariachi/audit` | Append-only audit logging |
-| `@mariachi/api-facade` | Fastify server adapter, auth strategies |
-| `@mariachi/storage` | S3, local file storage |
-| `@mariachi/notifications` | Email (Resend), in-app notifications |
-| `@mariachi/billing` | Stripe billing, webhooks |
-| `@mariachi/search` | Typesense, full-text search |
-| `@mariachi/ai` | AI SDK, sessions, tools, prompts, agent loops |
-| `@mariachi/integrations` | Third-party integration pattern |
-| `@mariachi/testing` | In-memory test doubles, factories |
-| `@mariachi/create` | Scaffolding, validation |
-| `@mariachi/cli` | CLI binary |
-
-## Monolith vs Microservice
-
-Mariachi is designed as a **modular monolith**. All packages can live in one codebase and share the same process. The communication layer (`@mariachi/communication`) uses an in-process adapter by default, routing procedure calls directly to registered handlers.
-
-For future scaling, the communication layer can be swapped for a transport adapter (e.g., message queue, gRPC) without changing controllers or services. The framework does not prescribe microservices; teams can extract services later if needed.
-
-## Adapter Pattern
-
-External dependencies are abstracted behind adapters. Each package exposes a factory (e.g., `createCache`, `createSearch`) that selects the implementation based on config.
+A request crosses three layers. Each has one job and a hard import boundary.
 
 ```mermaid
 flowchart LR
-    subgraph Config
-        C[Config]
-    end
-
-    subgraph Factory
-        F[createX]
-    end
-
-    subgraph Adapters
-        A1[RedisAdapter]
-        A2[MemoryAdapter]
-    end
-
-    C --> F
-    F -->|adapter: redis| A1
-    F -->|adapter: memory| A2
+  Client --> Facade
+  subgraph Facade["Facade (api-facade / webhooks)"]
+    direction TB
+    A[auth strategy] --> R[rate limit] --> V[Zod validation]
+  end
+  Facade --> Controller["Controller (BaseController)"]
+  Controller -->|"communication.call(ctx, 'notes.create', input)"| Handler
+  subgraph Service layer
+    Handler["Handler (procedure schema)"] --> Service --> Repository --> DB[(Postgres)]
+    Service --> Jobs & Events & Cache
+  end
 ```
 
-**Example:** `createSearch(config)` returns `TypesenseSearchAdapter` when `config.adapter === 'typesense'`, or `MemorySearchAdapter` when `config.adapter === 'memory'`. Tests use in-memory adapters; production uses Redis, PostgreSQL, Stripe, etc.
+| Layer | Owns | May import | Must not import |
+| --- | --- | --- | --- |
+| Facade | Transport, auth, rate limits, CORS, request context, OpenAPI | `api-facade`, `server`, `webhooks`, auth adapters | Database, services |
+| Controller | Route shapes and Zod schemas; maps HTTP to a procedure | `api-facade`, `src/contracts/*` | Services, repositories, database packages |
+| Service | Business rules, data access, side effects | Repositories, `jobs`, `events`, `cache`, integrations | HTTP frameworks, `server`, `api-facade` |
 
-Adapters implement a common interface. The factory is the single place that maps config to implementation, keeping application code vendor-agnostic.
+Controllers reach services **only** through `@mariachi/communication`. The in-process adapter is a
+function call with validation, scope checks, timeouts and tracing around it; the boundary is what lets
+a module move to another process later without touching controllers. `mariachi validate` enforces
+all of the boundaries above.
+
+## Project layout
+
+`mariachi init` creates this layout, and generators and `validate` assume it:
+
+```
+src/
+  main.ts                    composition root (config → lifecycle → resources → communication → HTTP)
+  contracts/<domain>.ts      Zod schemas + `Procedures` type augmentation, shared by controllers and handlers
+  api/controllers/           BaseController subclasses; index.ts lists them
+  services/<domain>/         <domain>.service.ts, .repository.ts, .handler.ts, .service.test.ts
+  services/index.ts          constructs services and registers their handlers
+  schema/                    defineTable() tables; index.ts re-exports all of them for `mariachi db`
+  seeds/index.ts             defineSeed() seeds
+  jobs/                      defineJob() definitions; index.ts lists them
+  integrations/<vendor>/     typed clients for third-party APIs
+```
+
+Contracts are the only thing controllers and services share. They hold schemas and types, not code.
+
+## One process, many roles
+
+The composition root decides what a process runs. The generated `main.ts` runs the API and the job
+worker together. To split them later, create a second entry point that bootstraps the same resources
+and calls `jobs.start()` without starting the HTTP server. Services and handlers don't change.
+
+## Adapters
+
+Every external system sits behind an interface with a factory that picks the implementation from
+config (`createCache({ adapter: 'redis' | 'memory' })`, `createEventBus(...)`, `createJobQueue(...)`).
+Memory adapters exist for tests and local development. See
+[adr/001-adapter-pattern.md](./adr/001-adapter-pattern.md) and [patterns.md](./patterns.md).
+
+## Multi-tenancy
+
+`Context.tenantId` is the tenant boundary. Tables with a `tenantId` column are tenant-scoped:
+`DrizzleRepository` adds the tenant filter to every query and sets it on insert, and it throws
+`database/tenant-required` when the context has no tenant. Code that must cross tenants (admin tools,
+maintenance jobs) opts in explicitly with `repository.crossTenant()`.

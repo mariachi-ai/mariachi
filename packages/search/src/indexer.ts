@@ -16,6 +16,10 @@ export class SearchIndexer {
     index: SearchIndex,
     documents: SearchDocument[]
   ): Promise<void> {
+    if (this.client.reindexAlias) {
+      await this.client.reindexAlias(indexName, index, documents);
+      return;
+    }
     await this.client.deleteIndex(indexName);
     await this.client.createIndex(index);
     if (documents.length > 0) {

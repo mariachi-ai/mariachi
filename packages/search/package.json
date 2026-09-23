@@ -1,6 +1,17 @@
 {
   "name": "@mariachi/search",
   "version": "0.0.5",
+  "description": "Full-text search on Typesense (or memory) with typed fields, alias-based reindexing and query analytics.",
+  "mariachi": {
+    "category": "data",
+    "status": "beta",
+    "useWhen": "Search indexes over your data",
+    "entry": [
+      "createSearch",
+      "DefaultSearch",
+      "SearchIndexer"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -13,7 +24,8 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -22,7 +34,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*",
@@ -30,6 +46,7 @@
   },
   "devDependencies": {
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

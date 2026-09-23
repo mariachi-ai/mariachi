@@ -8,3 +8,5 @@ dist/
 coverage/
 .DS_Store
 .pnpm-store/
+.e2e-project/
+.scaffold-test/

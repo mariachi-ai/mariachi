@@ -1,8 +1,9 @@
+import { IntegrationError } from '@mariachi/core';
 import type { SlackCredentials } from './credentials';
 import type { SendMessageInput, SendMessageOutput } from './types';
 
 export async function postMessage(
-  credentials: SlackCredentials,
+  credentials: Pick<SlackCredentials, 'botToken'>,
   input: SendMessageInput
 ): Promise<SendMessageOutput> {
   const url = 'https://slack.com/api/chat.postMessage';
@@ -23,7 +24,7 @@ export async function postMessage(
 
   const data = (await res.json()) as { ok: boolean; ts?: string; channel?: string };
   if (!data.ok) {
-    throw new Error(`Slack API error: ${JSON.stringify(data)}`);
+    throw new IntegrationError('integrations/slack-api', `Slack API error: ${JSON.stringify(data)}`);
   }
 
   return {

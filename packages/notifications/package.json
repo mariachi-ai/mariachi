@@ -1,19 +1,41 @@
 {
   "name": "@mariachi/notifications",
   "version": "0.0.5",
+  "description": "Email (Resend, SMTP), SMS (Twilio), push (FCM) and in-app notifications with preferences, per-channel queued delivery and delivery tracking.",
+  "mariachi": {
+    "category": "domain",
+    "status": "beta",
+    "useWhen": "Sending messages to users",
+    "entry": [
+      "DefaultNotifications",
+      "createEmailAdapter",
+      "DrizzleNotificationStore"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js",
+      "require": "./dist/schema.cjs"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "import": "./dist/postgres.js",
+      "require": "./dist/postgres.cjs"
     }
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -22,15 +44,35 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*",
     "@mariachi/database": "workspace:*",
-    "resend": "^4"
+    "resend": "^4",
+    "zod": "^3.25.76"
+  },
+  "peerDependencies": {
+    "@mariachi/database-postgres": "workspace:*",
+    "drizzle-orm": "^0.38"
+  },
+  "peerDependenciesMeta": {
+    "@mariachi/database-postgres": {
+      "optional": true
+    },
+    "drizzle-orm": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@mariachi/database-postgres": "workspace:*",
+    "drizzle-orm": "^0.38",
+    "tsup": "^8",
     "typescript": "^5.7",
-    "tsup": "^8"
+    "vitest": "^3"
   }
 }

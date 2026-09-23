@@ -1,39 +1,40 @@
 import type { Context, Middleware } from '@mariachi/core';
-import { TenancyError } from '@mariachi/core';
-import { createTenantResolver } from './resolver';
-import type { TenancyConfig, TenantResolverInput } from './types';
+import type { Tenancy } from './tenancy';
+import type { TenantRecord, TenantResolverInput } from './types';
 
 export interface TenancyContext extends Context {
   hostname?: string;
-  headers?: Record<string, string | undefined>;
+  headers?: Record<string, string | string[] | undefined>;
   jwtClaims?: Record<string, unknown>;
   path?: string;
+  /** HTTP facade contexts expose the request here. */
+  request?: { headers: Record<string, string | string[] | undefined>; url: string };
+  tenant?: TenantRecord | null;
 }
 
 function toResolverInput(ctx: TenancyContext): TenantResolverInput {
+  const headers = ctx.headers ?? ctx.request?.headers;
+  const host = headers?.host;
   return {
-    hostname: ctx.hostname ?? ctx.server,
-    headers: ctx.headers,
+    hostname: ctx.hostname ?? (Array.isArray(host) ? host[0] : host),
+    headers,
     jwtClaims: ctx.jwtClaims,
-    path: ctx.path,
+    path: ctx.path ?? ctx.request?.url,
   };
 }
 
-export function createTenancyMiddleware(config: TenancyConfig): Middleware {
-  const resolver = createTenantResolver(config);
-
+/**
+ * Establishes the tenant for each call and sets `ctx.tenantId` / `ctx.tenant`. Works as a
+ * communication middleware and as an api-facade `HttpMiddleware`.
+ */
+export function createTenancyMiddleware(tenancy: Tenancy): Middleware {
   return async (ctx: Context, next: () => Promise<void>): Promise<void> => {
-    const input = toResolverInput(ctx as TenancyContext);
-    const tenantId = resolver.resolve(input);
-
-    if (tenantId != null) {
-      (ctx as Context & { tenantId: string }).tenantId = tenantId;
+    const tctx = ctx as TenancyContext;
+    const record = await tenancy.establish(ctx, toResolverInput(tctx));
+    if (record) {
+      (ctx as { tenantId: string | null }).tenantId = record.id;
+      tctx.tenant = record;
     }
-
-    if (config.required === true && tenantId == null) {
-      throw new TenancyError('tenancy/missing-tenant', 'Tenant identification is required');
-    }
-
     await next();
   };
 }

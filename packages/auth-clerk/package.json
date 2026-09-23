@@ -1,6 +1,16 @@
 {
   "name": "@mariachi/auth-clerk",
-  "version": "0.1.0",
+  "version": "0.0.5",
+  "description": "Clerk token verification and Svix-signed webhooks.",
+  "mariachi": {
+    "category": "security",
+    "status": "alpha",
+    "useWhen": "Using Clerk as the identity provider",
+    "entry": [
+      "createClerkAuth",
+      "ClerkWebhookController"
+    ]
+  },
   "private": true,
   "type": "module",
   "exports": {
@@ -20,7 +30,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@clerk/backend": "^1",
@@ -29,5 +43,8 @@
     "@mariachi/server": "workspace:*",
     "@mariachi/webhooks": "workspace:*",
     "svix": "^1"
+  },
+  "devDependencies": {
+    "vitest": "^3"
   }
 }

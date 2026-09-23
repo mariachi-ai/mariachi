@@ -1,6 +1,17 @@
 {
   "name": "@mariachi/lifecycle",
   "version": "0.0.5",
+  "description": "Composition root: bootstrap, ordered startup and shutdown, liveness/readiness/startup health.",
+  "mariachi": {
+    "category": "foundation",
+    "status": "beta",
+    "useWhen": "Starting a process and managing resources that connect and disconnect",
+    "entry": [
+      "bootstrap",
+      "bootstrapForTest",
+      "Lifecycle"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -22,7 +33,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*",
@@ -31,6 +46,7 @@
   },
   "devDependencies": {
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

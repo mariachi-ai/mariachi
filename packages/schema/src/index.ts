@@ -1,22 +1,19 @@
 /**
- * Backend-agnostic re-export of all framework table definitions.
- * No Drizzle or Postgres; use compileTable from @mariachi/database-postgres
- * in your app (or optional @mariachi/schema-postgres) to get Drizzle tables.
+ * Every framework table definition, backend-agnostic. Each import targets the package's
+ * dependency-free `./schema` subpath, so this pulls in no vendor SDKs.
+ * Compile with `compileSchema()` from `@mariachi/database-postgres`.
  */
 
-// Database (core)
-export { usersTable, tenantsTable } from '@mariachi/database';
+export { usersTable, tenantsTable } from '@mariachi/database/schema';
 
-// Auth
 export {
   rolesTable,
   permissionsTable,
   userRolesTable,
   apiKeysTable,
   sessionsTable,
-} from '@mariachi/auth';
+} from '@mariachi/auth/schema';
 
-// Billing
 export {
   billingCustomersTable,
   billingSubscriptionsTable,
@@ -26,23 +23,18 @@ export {
   billingUsageRecordsTable,
   billingWebhookEventsTable,
   billingPlansTable,
-} from '@mariachi/billing';
+} from '@mariachi/billing/schema';
 
-// AI
-export { aiSessionsTable, aiMessagesTable, aiTelemetryTable } from '@mariachi/ai';
+export { aiSessionsTable, aiMessagesTable, aiTelemetryTable } from '@mariachi/ai/schema';
 
-// Notifications
 export {
   notificationsTable,
   notificationPreferencesTable,
   notificationDeliveriesTable,
-} from '@mariachi/notifications';
+} from '@mariachi/notifications/schema';
 
-// Config
-export { featureFlagsTable } from '@mariachi/config';
+export { featureFlagsTable } from '@mariachi/config/schema';
 
-// Audit
-export { auditLogsTable } from '@mariachi/audit';
+export { auditLogsTable } from '@mariachi/audit/schema';
 
-// Webhooks
-export { webhookLogsTable } from '@mariachi/webhooks';
+export { webhookLogsTable } from '@mariachi/webhooks/schema';

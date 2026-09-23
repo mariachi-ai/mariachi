@@ -1,7 +1,7 @@
 import type { Context, Logger, TracerAdapter, MetricsAdapter } from '@mariachi/core';
-import { withSpan, getContainer, KEYS } from '@mariachi/core';
+import { AuthError, withSpan, resolveInstrumentation, type InstrumentationDeps } from '@mariachi/core';
 import type { Instrumentable } from '@mariachi/core';
-import type { AuthenticationAdapter, AuthorizationAdapter, ResolvedIdentity } from './types';
+import type { AuthenticationAdapter, AuthorizationAdapter, IdentityPayload, ResolvedIdentity } from './types';
 
 export abstract class Auth implements Instrumentable {
   readonly logger: Logger;
@@ -10,11 +10,11 @@ export abstract class Auth implements Instrumentable {
   protected readonly authentication: AuthenticationAdapter;
   protected readonly authorization: AuthorizationAdapter;
 
-  constructor(config: { authentication: AuthenticationAdapter; authorization: AuthorizationAdapter }) {
-    const container = getContainer();
-    this.logger = container.resolve<Logger>(KEYS.Logger);
-    this.tracer = container.has(KEYS.Tracer) ? container.resolve<TracerAdapter>(KEYS.Tracer) : undefined;
-    this.metrics = container.has(KEYS.Metrics) ? container.resolve<MetricsAdapter>(KEYS.Metrics) : undefined;
+  constructor(config: { authentication: AuthenticationAdapter; authorization: AuthorizationAdapter }, instrumentation?: InstrumentationDeps) {
+    const resolved = resolveInstrumentation(instrumentation);
+    this.logger = resolved.logger;
+    this.tracer = resolved.tracer;
+    this.metrics = resolved.metrics;
     this.authentication = config.authentication;
     this.authorization = config.authorization;
   }
@@ -48,11 +48,20 @@ export abstract class Auth implements Instrumentable {
       };
       const allowed = await this.authorization.can(identity, action, resource);
       this.metrics?.increment(allowed ? 'auth.authorize.allowed' : 'auth.authorize.denied', 1, { action, resource });
+      if (!allowed) await this.onAuthorizationDenied?.(ctx, action, resource);
       return allowed;
     });
   }
 
-  async sign(ctx: Context, payload: Omit<ResolvedIdentity, 'identityType'>, expiresIn?: string): Promise<string> {
+  /** Throws `AuthError('auth/forbidden')` unless the caller may perform `action` on `resource`. */
+  async requirePermission(ctx: Context, action: string, resource: string): Promise<void> {
+    if (!ctx.userId) throw new AuthError('auth/unauthorized', 'Authentication required');
+    if (!(await this.authorize(ctx, action, resource))) {
+      throw new AuthError('auth/forbidden', `Not allowed to ${action} ${resource}`, { action, resource });
+    }
+  }
+
+  async sign(ctx: Context, payload: IdentityPayload, expiresIn?: string | number): Promise<string> {
     return withSpan(this.tracer, 'auth.sign', { userId: payload.userId }, async () => {
       return this.authentication.sign(payload, expiresIn);
     });

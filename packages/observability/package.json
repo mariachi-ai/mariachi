@@ -1,6 +1,18 @@
 {
   "name": "@mariachi/observability",
   "version": "0.0.5",
+  "description": "Logging, tracing, metrics and error tracking behind swappable adapters.",
+  "mariachi": {
+    "category": "foundation",
+    "status": "beta",
+    "useWhen": "Logs, spans, metrics or error reporting",
+    "entry": [
+      "createObservability",
+      "createLogger",
+      "createTracer",
+      "createMetrics"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -22,18 +34,47 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "pino": "^9",
-    "@opentelemetry/api": "^1",
-    "prom-client": "^15",
-    "@sentry/node": "^8",
-    "@mariachi/core": "workspace:*"
+    "@mariachi/core": "workspace:*",
+    "pino": "^9"
   },
   "devDependencies": {
     "typescript": "^5.7",
     "tsup": "^8",
-    "@types/node": "^22"
+    "@types/node": "^22",
+    "vitest": "^3",
+    "@opentelemetry/api": "^1",
+    "prom-client": "^15",
+    "@sentry/node": "^8"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1",
+    "@opentelemetry/sdk-node": ">=0.50",
+    "@opentelemetry/exporter-trace-otlp-http": ">=0.50",
+    "prom-client": "^15",
+    "@sentry/node": ">=8"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/api": {
+      "optional": true
+    },
+    "@opentelemetry/sdk-node": {
+      "optional": true
+    },
+    "@opentelemetry/exporter-trace-otlp-http": {
+      "optional": true
+    },
+    "prom-client": {
+      "optional": true
+    },
+    "@sentry/node": {
+      "optional": true
+    }
   }
 }

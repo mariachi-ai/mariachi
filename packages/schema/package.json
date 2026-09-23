@@ -1,6 +1,16 @@
 {
   "name": "@mariachi/schema",
   "version": "0.0.5",
+  "description": "Every framework table (users, tenants, auth, billing, audit, ...) in the DSL, for apps to include in their schema.",
+  "mariachi": {
+    "category": "data",
+    "status": "beta",
+    "useWhen": "Adding framework-owned tables to your migrations",
+    "entry": [
+      "usersTable",
+      "tenantsTable"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -22,7 +32,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/audit": "workspace:*",
@@ -36,6 +50,7 @@
   },
   "devDependencies": {
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

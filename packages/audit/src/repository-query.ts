@@ -3,12 +3,10 @@ import type { Repository, FilterCondition } from '@mariachi/database';
 import type { AuditEntry, AuditQuery, AuditQueryFilter } from './types';
 
 export class RepositoryAuditQuery implements AuditQuery {
-  constructor(
-    private readonly repository: Repository<AuditEntry>,
-    private readonly ctx: Context,
-  ) {}
+  constructor(private readonly repository: Repository<AuditEntry>) {}
 
   async find(
+    ctx: Context,
     filter: AuditQueryFilter,
     pagination: PaginationParams,
   ): Promise<PaginatedResult<AuditEntry>> {
@@ -18,21 +16,22 @@ export class RepositoryAuditQuery implements AuditQuery {
     if (filter.action) conditions.push({ field: 'action', op: 'eq', value: filter.action });
     if (filter.resource) conditions.push({ field: 'resource', op: 'eq', value: filter.resource });
     if (filter.resourceId) conditions.push({ field: 'resourceId', op: 'eq', value: filter.resourceId });
-    if (filter.tenantId) conditions.push({ field: 'tenantId', op: 'eq', value: filter.tenantId });
+    const tenantId = ctx.tenantId ?? filter.tenantId;
+    if (tenantId) conditions.push({ field: 'tenantId', op: 'eq', value: tenantId });
     if (filter.from) conditions.push({ field: 'occurredAt', op: 'gte', value: filter.from });
     if (filter.to) conditions.push({ field: 'occurredAt', op: 'lte', value: filter.to });
 
     return this.repository.paginate(
-      this.ctx,
+      ctx,
       pagination,
       conditions.length > 0 ? conditions : undefined,
       { field: 'occurredAt', direction: 'desc' },
     );
   }
 
-  async findByResource(resource: string, resourceId: string): Promise<AuditEntry[]> {
+  async findByResource(ctx: Context, resource: string, resourceId: string): Promise<AuditEntry[]> {
     return this.repository.findMany(
-      this.ctx,
+      ctx,
       { resource, resourceId } as Partial<AuditEntry>,
       { field: 'occurredAt', direction: 'desc' },
     );

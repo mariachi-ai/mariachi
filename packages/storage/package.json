@@ -1,6 +1,17 @@
 {
   "name": "@mariachi/storage",
   "version": "0.0.5",
+  "description": "Object storage (S3 and compatibles, local disk, memory) with path-safe keys, streaming, presigned uploads and signed URLs.",
+  "mariachi": {
+    "category": "data",
+    "status": "beta",
+    "useWhen": "Storing uploads and files",
+    "entry": [
+      "createStorage",
+      "DefaultStorage",
+      "handleSignedLocalRequest"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -13,7 +24,8 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -22,15 +34,21 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@mariachi/core": "workspace:*",
     "@aws-sdk/client-s3": "^3",
-    "@aws-sdk/s3-request-presigner": "^3"
+    "@aws-sdk/lib-storage": "^3",
+    "@aws-sdk/s3-request-presigner": "^3",
+    "@mariachi/core": "workspace:*"
   },
   "devDependencies": {
+    "tsup": "^8",
     "typescript": "^5.7",
-    "tsup": "^8"
+    "vitest": "^3"
   }
 }

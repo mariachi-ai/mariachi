@@ -1,103 +1,124 @@
-import { config } from 'dotenv';
-import { AppConfigSchema, type AppConfig } from './schema';
+import { ConfigError, fromZodError, isZodError, loadOptionalPeer } from '@mariachi/core';
+import type { z } from 'zod';
+import { AppConfigSchema, type AppConfig, type AppConfigInput } from './schema';
+import { buildConfigFromEnv, readEnv } from './env';
 import type { ConfigOptions, SecretsAdapter, FeatureFlagAdapter } from './types';
 import { EnvSecretsAdapter } from './adapters/env';
-import { createFeatureFlags as createFeatureFlagsFactory } from './flags/index';
+import { Secrets } from './secrets';
 
-config();
+export interface LoadConfigOptions {
+  /** Load a `.env` file first. `true` = `.env` in cwd, string = explicit path. Default: true outside production. */
+  dotenv?: boolean | string;
+  /** Use this instead of `process.env` (tests). */
+  env?: Record<string, string | undefined>;
+}
 
+interface ConfigSection<T = unknown> {
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>;
+  fromEnv?: (read: (key: string) => string | undefined) => unknown;
+}
+
+const sections = new Map<string, ConfigSection>();
 let cachedConfig: AppConfig | null = null;
 
-function buildConfigFromEnv(): Partial<AppConfig> {
-  const env = process.env.ENV ?? process.env.NODE_ENV;
-  const databaseUrl = process.env.DATABASE_URL;
-  const databaseAdapter = process.env.DATABASE_ADAPTER;
-  const databasePoolMin = process.env.DATABASE_POOL_MIN;
-  const databasePoolMax = process.env.DATABASE_POOL_MAX;
-  const redisUrl = process.env.REDIS_URL;
-  const jwtSecret = process.env.JWT_SECRET;
-  const sessionSecret = process.env.SESSION_SECRET;
-
-  const base: Partial<AppConfig> = {
-    env:
-      env === 'development' || env === 'test' || env === 'production'
-        ? env
-        : undefined,
-    database: databaseUrl
-      ? {
-          url: databaseUrl,
-          adapter: databaseAdapter ?? 'postgres',
-          poolMin: databasePoolMin ? Number(databasePoolMin) : 2,
-          poolMax: databasePoolMax ? Number(databasePoolMax) : 10,
-        }
-      : undefined,
-    redis: redisUrl ? { url: redisUrl } : undefined,
-    auth:
-      jwtSecret || sessionSecret
-        ? {
-            adapter: 'jwt',
-            jwtSecret: jwtSecret ?? undefined,
-            sessionSecret: sessionSecret ?? undefined,
-          }
-        : undefined,
-  };
-
-  return base;
+/**
+ * Lets a package contribute a validated config section. Call at module scope (before `loadConfig()`).
+ * Read it back with `useConfigSection(name)`.
+ */
+export function registerConfigSection<T>(name: string, section: ConfigSection<T>): void {
+  sections.set(name, section as ConfigSection);
+  cachedConfig = null;
 }
 
-export function loadConfig(overrides?: Partial<AppConfig>): AppConfig {
-  const fromEnv = buildConfigFromEnv();
-  const merged = deepMerge(fromEnv, overrides ?? {}) as Partial<AppConfig>;
-  return AppConfigSchema.parse(merged) as AppConfig;
+function loadDotenv(option: boolean | string | undefined, isProduction: boolean): void {
+  const enabled = option ?? !isProduction;
+  if (!enabled) return;
+  // dotenv is loaded lazily so importing @mariachi/config never mutates process.env.
+  const dotenv = loadOptionalPeer<typeof import('dotenv')>('dotenv', 'loadConfig({ dotenv })', import.meta.url);
+  dotenv.config(typeof option === 'string' ? { path: option } : undefined);
 }
 
-function deepMerge<T extends object>(target: T, source: Partial<T>): T {
-  const result = { ...target };
-  for (const key of Object.keys(source) as (keyof T)[]) {
-    const sourceVal = source[key];
-    if (
-      sourceVal !== undefined &&
-      sourceVal !== null &&
-      typeof sourceVal === 'object' &&
-      !Array.isArray(sourceVal) &&
-      typeof (sourceVal as object).constructor === 'function' &&
-      (sourceVal as object).constructor === Object
-    ) {
-      const targetVal = result[key];
-      (result as Record<string, unknown>)[key as string] = deepMerge(
-        (typeof targetVal === 'object' && targetVal !== null
-          ? targetVal
-          : {}) as object,
-        sourceVal as object
-      );
-    } else if (sourceVal !== undefined) {
-      (result as Record<string, unknown>)[key as string] = sourceVal;
+function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, value: unknown, what: string): T {
+  try {
+    return schema.parse(value);
+  } catch (error) {
+    if (isZodError(error)) {
+      const v = fromZodError(error);
+      const summary = v.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+      throw new ConfigError('config/invalid', `Invalid ${what}: ${summary}`, { issues: v.issues });
     }
+    throw error;
+  }
+}
+
+/**
+ * Loads config from env (+ optional .env) merged with `overrides`, validates it, and caches it
+ * so later `useConfig()` calls return the same object.
+ */
+export function loadConfig(overrides?: AppConfigInput, options: LoadConfigOptions = {}): AppConfig {
+  const source = options.env ?? process.env;
+  if (!options.env) loadDotenv(options.dotenv, (source.NODE_ENV ?? source.ENV) === 'production');
+
+  const fromEnv = buildConfigFromEnv(source);
+  const merged = deepMerge(fromEnv as Record<string, unknown>, (overrides ?? {}) as Record<string, unknown>);
+  const config = parse(AppConfigSchema, merged, 'configuration');
+
+  const read = options.env ? (k: string) => options.env?.[k] : readEnv;
+  for (const [name, section] of sections) {
+    const raw = deepMerge(
+      (section.fromEnv?.(read) ?? {}) as Record<string, unknown>,
+      ((config.sections[name] as Record<string, unknown>) ?? {}),
+    );
+    config.sections[name] = parse(section.schema, raw, `config section "${name}"`);
+  }
+
+  cachedConfig = config;
+  return config;
+}
+
+export function useConfig(): AppConfig {
+  if (!cachedConfig) cachedConfig = loadConfig();
+  return cachedConfig;
+}
+
+export function useConfigSection<T>(name: string): T {
+  const config = useConfig();
+  if (!(name in config.sections)) {
+    throw new ConfigError('config/unknown-section', `Config section "${name}" is not registered`);
+  }
+  return config.sections[name] as T;
+}
+
+/** Clears the cached config (tests). */
+export function resetConfig(): void {
+  cachedConfig = null;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype;
+}
+
+function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...target };
+  for (const [key, value] of Object.entries(source)) {
+    if (value === undefined) continue;
+    result[key] = isPlainObject(value) && isPlainObject(result[key]) ? deepMerge(result[key] as Record<string, unknown>, value) : value;
   }
   return result;
 }
 
-export function createSecrets(config: ConfigOptions['secrets']): SecretsAdapter {
-  if (config.adapter === 'env') {
-    return new EnvSecretsAdapter();
-  }
-  throw new Error(`Unsupported secrets adapter: ${config.adapter}`);
+export function createSecrets(config: ConfigOptions['secrets'] = { adapter: 'env' }): Secrets {
+  if (config.adapter === 'env') return new Secrets(new EnvSecretsAdapter());
+  throw new ConfigError('config/unsupported-secrets-adapter', `Unsupported secrets adapter: ${config.adapter}`);
 }
 
-export function createFeatureFlags(
-  config: NonNullable<ConfigOptions['flags']>
-): FeatureFlagAdapter {
-  return createFeatureFlagsFactory(config);
-}
-
-export function useConfig(): AppConfig {
-  if (!cachedConfig) {
-    cachedConfig = loadConfig();
-  }
-  return cachedConfig;
-}
-
-export type { AppConfig, ConfigOptions, SecretsAdapter, FeatureFlagAdapter };
+export { createFeatureFlags, type FeatureFlagsConfig } from './flags/index';
+export { evaluateFlag } from './flags/adapters';
+export type { AppConfig, AppConfigInput, ConfigOptions, SecretsAdapter, FeatureFlagAdapter };
+export type { FlagContext, FeatureFlagRecord, FeatureFlagStore, TenantFlagOverride } from './types';
 export { AppConfigSchema };
+export { buildConfigFromEnv, readEnv };
 export { EnvSecretsAdapter } from './adapters/env';
+export { Secrets } from './secrets';
+export { CachedFeatureFlags, StoreFeatureFlagAdapter, StaticFeatureFlagAdapter } from './flags/adapters';
 export * from './schema/index';

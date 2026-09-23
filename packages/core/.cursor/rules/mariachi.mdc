@@ -5,32 +5,23 @@ alwaysApply: false
 
 # Mariachi Framework (consumer)
 
-When working in a project that uses Mariachi, read these files from the installed package:
+The framework docs ship in `node_modules/@mariachi/core/docs/`. Start at `README.md` there, then read:
 
-**Quick reference (same content as root `.mariachi/` in the framework repo):**
+- `node_modules/@mariachi/core/docs/architecture.md`: layers, project layout, import boundaries
+- `node_modules/@mariachi/core/docs/conventions.md`: rules enforced by `mariachi validate`
+- `node_modules/@mariachi/core/docs/patterns.md`: composition root, DI, context, errors, idempotency
+- `node_modules/@mariachi/core/docs/packages.md`: every package, with status and entry points
+- `node_modules/@mariachi/core/docs/ai-guide.md`: which piece to use, and common mistakes
+- `node_modules/@mariachi/core/docs/recipes/`: entity, job, webhook, integration, wiring
 
-- `node_modules/@mariachi/core/.mariachi/architecture.md` — Three-layer architecture (Facade → Controller → Service), import boundaries, naming conventions
-- `node_modules/@mariachi/core/.mariachi/conventions.md` — TypeScript/ESM rules, dependency rules, error handling, anti-patterns
-- `node_modules/@mariachi/core/.mariachi/packages.md` — All 28 packages with when to use each one
-- `node_modules/@mariachi/core/.mariachi/patterns.md` — Adapter factory, abstract service class, DI container, context propagation, Zod at boundaries
+## Critical rules
 
-**Step-by-step recipes:**
+- `ctx` first, always: `communication.call(ctx, 'domain.action', input)`, handlers `(ctx, input)`, jobs `(ctx, data)`
+- Controllers never import services or database packages; shared schemas live in `src/contracts/`
+- Throw `MariachiError` subclasses with a `code`, never raw `Error`
+- No `process.env` outside config
+- Relative imports are extensionless
+- Zod at boundaries (routes, procedures, jobs, events, config)
+- Generate code with `mariachi generate <entity|service|controller|job|integration> <name>` and check with `mariachi validate`
 
-- `node_modules/@mariachi/core/docs/recipes/add-domain-entity.md` — Schema, repository, service, handler, controller, tests
-- `node_modules/@mariachi/core/docs/recipes/add-background-job.md` — Job definition, worker registration, scheduling
-- `node_modules/@mariachi/core/docs/recipes/add-webhook-endpoint.md` — WebhookController with direct/queue modes
-- `node_modules/@mariachi/core/docs/recipes/add-integration.md` — Third-party integration with credentials and retry
-- `node_modules/@mariachi/core/docs/recipes/wiring-and-bootstrap.md` — Full initialization order from config to running servers
-
-**Decision trees and gotchas:** `node_modules/@mariachi/core/docs/ai-guide.md`
-
-## Critical Rules
-
-- Relative imports are extensionless: `import { foo } from './bar'` (not `'./bar.js'`)
-- Controllers never import services — always use `communication.call()`
-- Every operation takes `Context` as first argument — never drop context
-- Throw typed errors (`MariachiError` subclasses), never raw `Error`
-- Use factory functions (`createCache`, `createSearch`), never instantiate adapters directly
-- Validate with Zod at boundaries (controller input, handler schemas, job payloads)
-
-**To use this rule in Cursor:** Copy this file to your project's `.cursor/rules/` (e.g. `.cursor/rules/mariachi.mdc`) so Cursor picks it up. Paths above are relative to your project root where `node_modules/@mariachi/core` is installed.
+To use this rule in Cursor, copy it to your project's `.cursor/rules/`. Projects created by `mariachi init` get an `AGENTS.md` with the same pointers.

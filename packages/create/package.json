@@ -1,6 +1,17 @@
 {
   "name": "@mariachi/create",
   "version": "0.0.5",
+  "description": "Project scaffolding, generators and architecture validation used by the CLI.",
+  "mariachi": {
+    "category": "tooling",
+    "status": "beta",
+    "useWhen": "Programmatic scaffolding; most users run the CLI instead",
+    "entry": [
+      "createProject",
+      "generateEntity",
+      "validate"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -22,15 +33,29 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@mariachi/core": "workspace:*",
-    "handlebars": "^4.7",
-    "zod": "^3.24"
+    "@mariachi/core": "workspace:*"
   },
   "devDependencies": {
+    "@mariachi/api-facade": "workspace:*",
+    "@mariachi/auth": "workspace:*",
+    "@mariachi/communication": "workspace:*",
+    "@mariachi/config": "workspace:*",
+    "@mariachi/database": "workspace:*",
+    "@mariachi/database-postgres": "workspace:*",
+    "@mariachi/jobs": "workspace:*",
+    "@mariachi/lifecycle": "workspace:*",
+    "@types/node": "^22",
+    "drizzle-orm": "^0.38",
+    "zod": "^3.24",
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

@@ -1,51 +1,36 @@
+import { basename, relative, resolve } from 'node:path';
 import type { Command } from 'commander';
 import { createProject } from '@mariachi/create';
-
-const DEFAULT_MODE = 'monolith';
-const DEFAULT_DB = 'postgres';
-const DEFAULT_CACHE = 'redis';
-const DEFAULT_QUEUE = 'bullmq';
-const DEFAULT_AUTH = ['session'];
-const DEFAULT_STORAGE = 's3';
-const DEFAULT_EMAIL = 'resend';
+import { DIM, GREEN, RESET } from '../colors';
+import { fail, printResult } from '../output';
 
 export function registerInitCommand(program: Command): void {
   program
-    .command('init <name>')
-    .description('Initialize a new Mariachi project')
-    .option('--mode <mode>', 'Project mode: monolith | microservice', DEFAULT_MODE)
-    .option('--db <db>', 'Database adapter', DEFAULT_DB)
-    .option('--cache <cache>', 'Cache adapter', DEFAULT_CACHE)
-    .option('--queue <queue>', 'Queue adapter', DEFAULT_QUEUE)
-    .option('--auth <auth>', 'Auth adapters (comma-separated)', (v: string) => v.split(',').map((s) => s.trim()))
-    .option('--storage <storage>', 'Storage adapter', DEFAULT_STORAGE)
-    .option('--email <email>', 'Email adapter', DEFAULT_EMAIL)
-    .option('--features <features>', 'Features (comma-separated)', (v: string) => v.split(',').map((s) => s.trim()))
-    .action(async (name: string, opts: {
-      mode?: string;
-      db?: string;
-      cache?: string;
-      queue?: string;
-      auth?: string[];
-      storage?: string;
-      email?: string;
-      features?: string[];
-    }) => {
-      const auth = opts.auth ?? DEFAULT_AUTH;
-      const features = opts.features ?? [];
-      await createProject({
-        name,
-        mode: (opts.mode as 'monolith' | 'microservice') ?? DEFAULT_MODE,
-        adapters: {
-          database: opts.db ?? DEFAULT_DB,
-          cache: opts.cache ?? DEFAULT_CACHE,
-          queue: opts.queue ?? DEFAULT_QUEUE,
-          auth,
-          storage: opts.storage ?? DEFAULT_STORAGE,
-          email: opts.email ?? DEFAULT_EMAIL,
-        },
-        features,
-        outputDir: `./${name}`,
-      });
+    .command('init <directory>')
+    .description('Create a new Mariachi project (API, services, jobs, schema) in <directory>')
+    .option('-n, --name <name>', 'package name (default: directory name)')
+    .option('--no-example', 'skip the example "note" entity')
+    .option('--mariachi-version <range>', 'version range for @mariachi/* dependencies')
+    .action(async (directory: string, opts: { name?: string; example: boolean; mariachiVersion?: string }) => {
+      try {
+        const outputDir = resolve(directory);
+        const name = opts.name ?? basename(outputDir);
+        const result = await createProject({ name, outputDir, example: opts.example, mariachiVersion: opts.mariachiVersion });
+        printResult(result);
+        const cd = relative(process.cwd(), outputDir) || '.';
+        console.log(`\n${GREEN}Created ${name}.${RESET} Next steps:\n`);
+        for (const step of [
+          `cd ${cd}`,
+          'cp .env.example .env',
+          'docker compose up -d',
+          'pnpm install',
+          'pnpm db:generate && pnpm db:migrate',
+          'pnpm dev',
+        ]) {
+          console.log(`  ${DIM}$${RESET} ${step}`);
+        }
+      } catch (error) {
+        fail(error);
+      }
     });
 }

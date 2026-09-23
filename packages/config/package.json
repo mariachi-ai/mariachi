@@ -1,19 +1,44 @@
 {
   "name": "@mariachi/config",
   "version": "0.0.5",
+  "description": "Typed, validated configuration from the environment, plus secrets and feature flags.",
+  "mariachi": {
+    "category": "foundation",
+    "status": "beta",
+    "useWhen": "Reading any setting or secret (never process.env directly)",
+    "entry": [
+      "loadConfig",
+      "useConfig",
+      "readEnv",
+      "createSecrets",
+      "createFeatureFlags",
+      "DrizzleFeatureFlagStore"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js",
+      "require": "./dist/schema.cjs"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "import": "./dist/postgres.js",
+      "require": "./dist/postgres.cjs"
     }
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -22,7 +47,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "zod": "^3.24",
@@ -30,8 +59,23 @@
     "@mariachi/core": "workspace:*",
     "@mariachi/database": "workspace:*"
   },
+  "peerDependencies": {
+    "@mariachi/database-postgres": "workspace:*",
+    "drizzle-orm": "^0.38"
+  },
+  "peerDependenciesMeta": {
+    "@mariachi/database-postgres": {
+      "optional": true
+    },
+    "drizzle-orm": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@mariachi/database-postgres": "workspace:*",
+    "drizzle-orm": "^0.38",
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

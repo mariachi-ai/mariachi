@@ -1,6 +1,9 @@
-import { defineTable, column } from '@mariachi/database';
+import { defineTable, column, index } from '@mariachi/database';
 
-export const notificationDeliveriesTable = defineTable('notification_deliveries', {
+/** One row per notification and channel; `attemptCount` grows with retries. */
+export const notificationDeliveriesTable = defineTable(
+  'notification_deliveries',
+  {
   id:               column.uuid().primaryKey().defaultRandom(),
   notificationId:   column.uuid().notNull(),
   tenantId:         column.text().notNull(),
@@ -13,4 +16,12 @@ export const notificationDeliveriesTable = defineTable('notification_deliveries'
   sentAt:           column.timestamp(),
   deliveredAt:      column.timestamp(),
   createdAt:        column.timestamp().notNull().defaultNow(),
-});
+  updatedAt:        column.timestamp().notNull().defaultNow(),
+  },
+  {
+    indexes: [
+      index('notification_deliveries_uniq').on('notificationId', 'channel').unique(),
+      index('notification_deliveries_external_idx').on('externalId'),
+    ],
+  },
+);

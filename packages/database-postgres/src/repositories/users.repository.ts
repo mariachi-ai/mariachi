@@ -1,18 +1,17 @@
 import type { Context } from '@mariachi/core';
-import type { UsersRepository, User } from '@mariachi/database';
-import { users } from '../compiled-schemas';
+import { usersTable, type UsersRepository, type User } from '@mariachi/database';
 import { DrizzleRepository } from './drizzle.repository';
+import type { DrizzleDb } from '../transaction';
 
 export type { User };
 
 export class DrizzleUsersRepository extends DrizzleRepository<User> implements UsersRepository {
-  constructor(db: import('drizzle-orm/postgres-js').PostgresJsDatabase<Record<string, never>>) {
-    super(users, db, { tenantColumn: 'tenantId' });
+  constructor(db: DrizzleDb) {
+    super(usersTable, db);
   }
 
-  async findByEmail(ctx: Context, email: string): Promise<User | null> {
-    const rows = await this.findMany(ctx, { email } as Partial<User>);
-    return rows[0] ?? null;
+  findByEmail(ctx: Context, email: string): Promise<User | null> {
+    return this.findOne(ctx, { email });
   }
 }
 

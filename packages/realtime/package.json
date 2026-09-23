@@ -1,6 +1,17 @@
 {
   "name": "@mariachi/realtime",
   "version": "0.0.5",
+  "description": "WebSockets with channel authorization, heartbeats, presence and cross-instance fanout.",
+  "mariachi": {
+    "category": "async",
+    "status": "beta",
+    "useWhen": "Pushing live updates to connected clients",
+    "entry": [
+      "DefaultRealtime",
+      "WSAdapter",
+      "createRealtimeInfra"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -22,16 +33,22 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*",
     "ws": "^8",
-    "ioredis": "^5"
+    "ioredis": "^5",
+    "zod": "^3.24"
   },
   "devDependencies": {
     "typescript": "^5.7",
     "tsup": "^8",
-    "@types/ws": "^8"
+    "@types/ws": "^8",
+    "vitest": "^3"
   }
 }

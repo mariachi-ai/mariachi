@@ -1,42 +1,31 @@
 # @mariachi/core
 
-Shared types, typed errors, `Context`, DI container, `Result<T,E>`, and retry utilities for the Mariachi framework.
+Foundation types for every Mariachi package:
+
+- `Context`, plus the AsyncLocalStorage context store: `runWithContext`, `currentContext`, `requireContext`.
+- Typed errors: `MariachiError` and its subclasses, `toErrorEnvelope`, `errorToHttpStatus`, `fromZodError`.
+- The DI container with typed keys: `createContainer`, `createKey`, `KEYS`.
+- `Result<T, E>`.
+- `retry` and `withTimeout`.
+- Instrumentation helpers: `withSpan`, `timed`.
+- Idempotency: `IdempotencyStore`, `runOnce`.
+- `loadOptionalPeer` for lazily loaded vendor SDKs.
 
 ## Framework documentation
 
-When you install any `@mariachi/*` package, this documentation is included so you don't lose the framework's conventions and recipes.
+The framework docs ship inside this package, so they're available in any project at
+`node_modules/@mariachi/core/docs/`. Start at [docs/README.md](./docs/README.md).
 
-### Quick reference (same as repo `.mariachi/`)
+- [docs/architecture.md](./docs/architecture.md): layers, project layout, import boundaries
+- [docs/conventions.md](./docs/conventions.md): the rules `mariachi validate` enforces
+- [docs/patterns.md](./docs/patterns.md): composition root, DI, context, errors, idempotency
+- [docs/packages.md](./docs/packages.md): generated catalog of every package with status and entry points
+- [docs/ai-guide.md](./docs/ai-guide.md): which piece to use, and common mistakes
+- [docs/cli.md](./docs/cli.md): `mariachi init`, `generate`, `validate`, `db`
+- Topic guides: [http](./docs/http.md), [events](./docs/events.md), [jobs](./docs/jobs.md), [realtime](./docs/realtime.md), [integrations](./docs/integrations.md), [auth](./docs/auth-and-providers.md), [runbook](./docs/runbook.md)
+- Recipes: [domain entity](./docs/recipes/add-domain-entity.md), [background job](./docs/recipes/add-background-job.md), [webhook endpoint](./docs/recipes/add-webhook-endpoint.md), [integration](./docs/recipes/add-integration.md), [wiring and bootstrap](./docs/recipes/wiring-and-bootstrap.md)
 
-- **[.mariachi/architecture.md](./.mariachi/architecture.md)** — Three-layer flow, import boundaries, naming
-- **[.mariachi/conventions.md](./.mariachi/conventions.md)** — TypeScript/ESM, dependency rules, anti-patterns
-- **[.mariachi/packages.md](./.mariachi/packages.md)** — All 28 packages and when to use each
-- **[.mariachi/patterns.md](./.mariachi/patterns.md)** — Adapter factory, DI container, context, Zod at boundaries
+## AI assistants
 
-### Full docs
-
-- **[docs/architecture.md](./docs/architecture.md)** — Architecture with mermaid diagrams, package overview, adapter pattern
-- **[docs/conventions.md](./docs/conventions.md)** — Same as .mariachi with full detail
-- **[docs/packages.md](./docs/packages.md)** — Same as .mariachi
-- **[docs/patterns.md](./docs/patterns.md)** — Same as .mariachi
-- **[docs/integrations.md](./docs/integrations.md)** — How to add third-party integrations
-- **[docs/ai-guide.md](./docs/ai-guide.md)** — Decision trees, package cheat sheet, common gotchas
-- **[docs/runbook.md](./docs/runbook.md)** — Environment variables, CLI commands, validation
-- **[docs/adr/001-adapter-pattern.md](./docs/adr/001-adapter-pattern.md)** — ADR: adapter pattern
-- **[docs/improvements/](./docs/improvements/)** — Draft improvements (e.g. notifications/realtime/NATS)
-
-### Step-by-step recipes
-
-- [docs/recipes/add-domain-entity.md](./docs/recipes/add-domain-entity.md) — Schema, repository, service, handler, controller, tests
-- [docs/recipes/add-background-job.md](./docs/recipes/add-background-job.md) — Job definition, worker registration, scheduling
-- [docs/recipes/add-webhook-endpoint.md](./docs/recipes/add-webhook-endpoint.md) — WebhookController with direct/queue modes
-- [docs/recipes/add-integration.md](./docs/recipes/add-integration.md) — Third-party integration with credentials and retry
-- [docs/recipes/wiring-and-bootstrap.md](./docs/recipes/wiring-and-bootstrap.md) — Full initialization order from config to running servers
-
-### Cursor / AI assistants
-
-A Cursor rule file is included so your IDE can use the framework conventions:
-
-- **Copy** `node_modules/@mariachi/core/.cursor/rules/mariachi.mdc` into your project's `.cursor/rules/` (e.g. as `mariachi.mdc`). The rule points the AI at the docs in this package.
-
-After `pnpm add @mariachi/core`, all of the above paths are available under `node_modules/@mariachi/core/`.
+Projects created with `mariachi init` include an `AGENTS.md` that points here. For Cursor, copy
+`node_modules/@mariachi/core/.cursor/rules/mariachi.mdc` into your project's `.cursor/rules/`.

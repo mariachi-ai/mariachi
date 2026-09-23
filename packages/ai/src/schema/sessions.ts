@@ -1,7 +1,8 @@
 import { defineTable, column } from '@mariachi/database';
 
 export const aiSessionsTable = defineTable('ai_sessions', {
-  id:                column.uuid().primaryKey().defaultRandom(),
+  /** Caller-chosen id (any string), as passed to `SessionManager.create`. */
+  id:                column.text().primaryKey(),
   tenantId:          column.text().notNull(),
   userId:            column.text().notNull(),
   model:             column.text().notNull(),

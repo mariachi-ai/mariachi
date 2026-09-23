@@ -1,6 +1,19 @@
 {
   "name": "@mariachi/api-facade",
   "version": "0.0.5",
+  "description": "Public HTTP API: controllers, Zod-validated routes, auth strategies, rate limits, OpenAPI and health endpoints.",
+  "mariachi": {
+    "category": "http",
+    "status": "beta",
+    "useWhen": "Exposing REST endpoints to clients",
+    "entry": [
+      "createApiServer",
+      "BaseController",
+      "bearerStrategy",
+      "apiKeyStrategy",
+      "serviceTokenStrategy"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -22,18 +35,25 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@mariachi/auth": "workspace:*",
     "@mariachi/communication": "workspace:*",
     "@mariachi/core": "workspace:*",
     "@mariachi/observability": "workspace:*",
     "@mariachi/rate-limit": "workspace:*",
-    "@mariachi/server": "workspace:*"
+    "@mariachi/server": "workspace:*",
+    "zod": "^3",
+    "zod-to-json-schema": "^3.24"
   },
   "devDependencies": {
+    "@mariachi/storage": "workspace:^",
+    "tsup": "^8",
     "typescript": "^5.7",
-    "tsup": "^8"
+    "vitest": "^3"
   }
 }

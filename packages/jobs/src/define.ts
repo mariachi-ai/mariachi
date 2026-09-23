@@ -1,11 +1,6 @@
-import type { z } from 'zod';
-import type { JobDefinition, JobContext, RetryConfig } from './types';
+import type { JobDefinition } from './types';
 
-export function defineJob<T>(definition: {
-  name: string;
-  schema: z.ZodType<T>;
-  retry: RetryConfig;
-  handler: (data: T, ctx: JobContext) => Promise<void>;
-}): JobDefinition<T> {
+/** Declares a job. The schema validates payloads at enqueue time and again in the worker. */
+export function defineJob<T>(definition: JobDefinition<T>): JobDefinition<T> {
   return definition;
 }

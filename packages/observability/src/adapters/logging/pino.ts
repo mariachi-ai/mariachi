@@ -1,14 +1,50 @@
 import pino from 'pino';
 import type { Logger } from '@mariachi/core';
+import { currentContext } from '@mariachi/core';
+
+/** Adds the ambient Context's identifiers to every log line. */
+export function contextBindings(): Record<string, unknown> {
+  const ctx = currentContext();
+  if (!ctx) return {};
+  const bindings: Record<string, unknown> = { traceId: ctx.traceId };
+  if (ctx.tenantId) bindings.tenantId = ctx.tenantId;
+  if (ctx.userId) bindings.userId = ctx.userId;
+  return bindings;
+}
+
+export interface PinoLoggerOptions {
+  level?: string;
+  pretty?: boolean;
+  redact?: string[];
+}
+
+const DEFAULT_REDACT = [
+  'password',
+  '*.password',
+  'token',
+  '*.token',
+  'secret',
+  '*.secret',
+  'authorization',
+  '*.authorization',
+  'headers.authorization',
+  'headers.cookie',
+  '*.apiKey',
+];
 
 export class PinoLoggerAdapter implements Logger {
   #instance: pino.Logger;
 
-  constructor(options?: { level?: string } | { __pino: pino.Logger }) {
+  constructor(options?: PinoLoggerOptions | { __pino: pino.Logger }) {
     if (options && '__pino' in options) {
       this.#instance = options.__pino;
     } else {
-      this.#instance = pino({ level: options?.level ?? 'info' });
+      this.#instance = pino({
+        level: options?.level ?? 'info',
+        mixin: contextBindings,
+        redact: { paths: options?.redact ?? DEFAULT_REDACT, censor: '[REDACTED]' },
+        serializers: { err: pino.stdSerializers.err, error: pino.stdSerializers.err },
+      });
     }
   }
 

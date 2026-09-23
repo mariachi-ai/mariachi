@@ -1,6 +1,19 @@
 {
   "name": "@mariachi/core",
   "version": "0.0.5",
+  "description": "Context, typed errors, DI container, retry, idempotency and instrumentation primitives shared by every package.",
+  "mariachi": {
+    "category": "foundation",
+    "status": "beta",
+    "useWhen": "Always: Context, MariachiError subclasses, container keys, retry, runOnce",
+    "entry": [
+      "createContext",
+      "createContainer",
+      "KEYS",
+      "retry",
+      "runOnce"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -16,7 +29,6 @@
     "dist",
     "docs",
     "README.md",
-    ".mariachi",
     ".cursor"
   ],
   "publishConfig": {
@@ -26,13 +38,18 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "zod": "^3.24"
   },
   "devDependencies": {
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

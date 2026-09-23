@@ -1,32 +1,54 @@
-import Redis from 'ioredis';
+import type Redis from 'ioredis';
 import { CacheError } from '@mariachi/core';
 import type { CacheConfig, CacheClient } from '../types';
+import { connectRedis, createRedisClient, disconnectRedis, pingRedis, scanKeys } from '../redis-client';
+
+const INCR_SCRIPT = `
+  local v = redis.call("incrby", KEYS[1], ARGV[1])
+  if v == tonumber(ARGV[1]) and tonumber(ARGV[2]) > 0 then
+    redis.call("expire", KEYS[1], ARGV[2])
+  end
+  return v
+`;
 
 export class RedisCacheAdapter implements CacheClient {
-  private client: Redis;
+  private readonly client: Redis;
+  private readonly ownsClient: boolean;
   private readonly prefix: string;
   private readonly defaultTtl: number;
 
   constructor(config: CacheConfig) {
-    const url = config.url ?? 'redis://localhost:6379';
-    this.client = new Redis(url);
+    this.client = config.client ?? createRedisClient(config.url);
+    this.ownsClient = !config.client;
     this.prefix = config.prefix ?? 'mariachi';
     this.defaultTtl = config.defaultTtl ?? 3600;
+  }
+
+  /** The underlying ioredis client, for sharing with locks or idempotency stores. */
+  get redis(): Redis {
+    return this.client;
   }
 
   key(...segments: string[]): string {
     return [this.prefix, ...segments].join(':');
   }
 
+  private serialize(value: unknown): string {
+    return JSON.stringify(value);
+  }
+
+  private deserialize<T>(raw: string): T {
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return raw as T;
+    }
+  }
+
   async get<T = string>(key: string): Promise<T | null> {
     try {
       const raw = await this.client.get(key);
-      if (raw === null) return null;
-      try {
-        return JSON.parse(raw) as T;
-      } catch {
-        return raw as T;
-      }
+      return raw === null ? null : this.deserialize<T>(raw);
     } catch (e) {
       throw new CacheError('cache/get-failed', 'Failed to get from cache', { key, cause: e });
     }
@@ -34,13 +56,17 @@ export class RedisCacheAdapter implements CacheClient {
 
   async set(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
     try {
-      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
       const ttl = ttlSeconds ?? this.defaultTtl;
-      if (ttl > 0) {
-        await this.client.setex(key, ttl, serialized);
-      } else {
-        await this.client.set(key, serialized);
-      }
+      if (ttl > 0) await this.client.set(key, this.serialize(value), 'EX', ttl);
+      else await this.client.set(key, this.serialize(value));
+    } catch (e) {
+      throw new CacheError('cache/set-failed', 'Failed to set in cache', { key, cause: e });
+    }
+  }
+
+  async setIfAbsent(key: string, value: unknown, ttlSeconds: number): Promise<boolean> {
+    try {
+      return (await this.client.set(key, this.serialize(value), 'EX', ttlSeconds, 'NX')) === 'OK';
     } catch (e) {
       throw new CacheError('cache/set-failed', 'Failed to set in cache', { key, cause: e });
     }
@@ -55,21 +81,31 @@ export class RedisCacheAdapter implements CacheClient {
   }
 
   async has(key: string): Promise<boolean> {
-    const result = await this.client.exists(key);
-    return result === 1;
+    return (await this.client.exists(key)) === 1;
+  }
+
+  async incr(key: string, by = 1, ttlSeconds = 0): Promise<number> {
+    try {
+      return Number(await this.client.eval(INCR_SCRIPT, 1, key, String(by), String(ttlSeconds)));
+    } catch (e) {
+      throw new CacheError('cache/incr-failed', 'Failed to increment', { key, cause: e });
+    }
+  }
+
+  async ttl(key: string): Promise<number> {
+    return this.client.ttl(key);
   }
 
   async keys(pattern: string): Promise<string[]> {
-    const fullPattern = pattern.startsWith(this.prefix) ? pattern : `${this.prefix}:${pattern}`;
-    const keys = await this.client.keys(fullPattern);
-    return keys;
+    const fullPattern = pattern.startsWith(`${this.prefix}:`) ? pattern : `${this.prefix}:${pattern}`;
+    return scanKeys(this.client, fullPattern);
   }
 
   async flush(): Promise<void> {
     try {
-      const keys = await this.client.keys(`${this.prefix}:*`);
-      if (keys.length > 0) {
-        await this.client.del(...keys);
+      const keys = await scanKeys(this.client, `${this.prefix}:*`);
+      for (let i = 0; i < keys.length; i += 500) {
+        await this.client.unlink(...keys.slice(i, i + 500));
       }
     } catch (e) {
       throw new CacheError('cache/flush-failed', 'Failed to flush cache', { cause: e });
@@ -77,10 +113,14 @@ export class RedisCacheAdapter implements CacheClient {
   }
 
   async connect(): Promise<void> {
-    await this.client.ping();
+    await connectRedis(this.client);
   }
 
   async disconnect(): Promise<void> {
-    await this.client.quit();
+    if (this.ownsClient) await disconnectRedis(this.client);
+  }
+
+  isHealthy(): Promise<boolean> {
+    return pingRedis(this.client);
   }
 }

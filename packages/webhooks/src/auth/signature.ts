@@ -3,43 +3,37 @@ import { AuthController } from './auth-controller';
 import type { WebhookIdentity } from './auth-controller';
 
 /**
- * Abstract auth controller for webhooks that verify a signature header (e.g. HMAC-SHA256).
- * Subclasses implement verifySignature(signature, rawBody, ctx) using the provider's secret.
- * Requires rawBody on the request; ensure the server adapter preserves it (e.g. FastifyServerAdapter
- * with the application/json content-type parser that sets rawBody).
+ * Base for webhooks that verify a signature header (e.g. HMAC-SHA256) over the exact raw body.
+ * Subclasses implement `verifySignature`; use `crypto.timingSafeEqual` for comparisons.
  */
 export abstract class SignatureAuthController extends AuthController {
   abstract readonly provider: string;
   abstract readonly signatureHeader: string;
+  /** Header carrying the provider's delivery id, used for dedup. */
+  protected readonly eventIdHeader?: string;
 
-  /**
-   * Verify the signature against the raw body and context (e.g. resolve secret from ctx).
-   * Return true if the signature is valid.
-   */
-  protected abstract verifySignature(
-    signature: string,
-    rawBody: string | Buffer,
-    ctx: RequestContext,
-  ): Promise<boolean>;
+  protected abstract verifySignature(signature: string, rawBody: Buffer, ctx: RequestContext, req: IncomingRequest): Promise<boolean>;
+
+  /** Override to map a delivery to a tenant (e.g. from a path param or payload field). */
+  protected resolveTenant(_req: IncomingRequest): string | undefined {
+    return undefined;
+  }
 
   async auth(req: IncomingRequest, ctx: RequestContext): Promise<WebhookIdentity | null> {
     const signature = req.headers[this.signatureHeader.toLowerCase()];
     const sig = typeof signature === 'string' ? signature : Array.isArray(signature) ? signature[0] : undefined;
     if (!sig) return null;
-
-    const rawBody = req.rawBody;
-    if (rawBody === undefined || rawBody === null) {
+    if (!req.rawBody || req.rawBody.length === 0) {
+      ctx.logger.warn({ provider: this.provider }, 'webhook has no raw body; rejecting');
       return null;
     }
-    const bodyStr = typeof rawBody === 'string' ? rawBody : Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : '';
-    if (!bodyStr) return null;
-
-    const verified = await this.verifySignature(sig, rawBody, ctx);
-    if (!verified) return null;
-
+    if (!(await this.verifySignature(sig, req.rawBody, ctx, req))) return null;
+    const eventId = this.eventIdHeader ? req.headers[this.eventIdHeader.toLowerCase()] : undefined;
     return {
       provider: this.provider,
       verified: true,
+      tenantId: this.resolveTenant(req),
+      eventId: typeof eventId === 'string' ? eventId : undefined,
       metadata: {},
     };
   }

@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/services",
-  "version": "0.1.0",
+  "version": "0.0.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,10 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .turbo",
-    "test": "vitest"
+    "test": "vitest",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*",

@@ -5,10 +5,12 @@ export type {
   HealthStatus,
   HealthCheckResult,
   HealthCheck,
+  HealthReport,
 } from './types';
 
 export { StartupManager } from './startup';
-export { ShutdownManager } from './shutdown';
+export { ShutdownManager, type SignalHandlerOptions } from './shutdown';
 export { HealthManager } from './health';
-export { bootstrap } from './bootstrap';
-export type { BootstrapResult } from './bootstrap';
+export { Lifecycle, type ManageOptions } from './lifecycle';
+export { bootstrap, bootstrapForTest } from './bootstrap';
+export type { BootstrapResult, BootstrapOptions } from './bootstrap';

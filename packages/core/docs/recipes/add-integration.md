@@ -145,11 +145,12 @@ export const githubCreateIssue = defineIntegrationFn<CreateIssueInput, CreateIss
 
 ## 5. Register in the Registry (Optional)
 
-For discoverability, register the integration in a central registry.
+Register the integration so other code can find it and call it by name.
 
 ```ts
 import { IntegrationRegistry } from '@mariachi/integrations';
 import { GitHubCredentials } from './credentials';
+import { githubCreateIssue } from './index';
 
 const registry = new IntegrationRegistry();
 registry.register({
@@ -157,8 +158,13 @@ registry.register({
   description: 'GitHub integration for issues and repositories',
   credentialSchema: GitHubCredentials,
   functions: ['github.createIssue'],
+  handlers: { createIssue: githubCreateIssue },   // every listed function needs one
 });
+
+await registry.call('github.createIssue', input, ctx);
 ```
+
+`register` throws `integrations/missing-handler` if a listed function has no handler.
 
 ---
 

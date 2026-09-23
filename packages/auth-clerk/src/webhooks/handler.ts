@@ -26,7 +26,7 @@ export class ClerkWebhookHandler implements AuthWebhookHandler {
     }
 
     const event: ClerkWebhookEvent = verifyClerkWebhook(this.signingSecret, rawBody, svixHeaders);
-    const svixTimestamp = parseInt(svixHeaders['svix-timestamp'], 10);
+    const svixTimestamp = Number.parseInt(svixHeaders['svix-timestamp'], 10);
 
     return {
       id: svixHeaders['svix-id'],

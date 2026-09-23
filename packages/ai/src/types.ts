@@ -4,6 +4,18 @@ export interface AIConfig {
   adapter: string;
   apiKey?: string;
   defaultModel?: string;
+  /** Tried in order when the primary model fails. */
+  fallbackModels?: string[];
+  /** USD per 1K tokens. Overrides the built-in table. */
+  costTable?: CostTable;
+}
+
+export type CostTable = Record<string, { input: number; output: number }>;
+
+export interface AIProvider {
+  id: string;
+  generate(messages: AIMessage[], config: { model?: string; tools?: ToolDefinition[] }): Promise<AIResponse>;
+  stream?(messages: AIMessage[], config: { model?: string; tools?: ToolDefinition[] }): AsyncIterable<StreamChunk>;
 }
 
 export interface AIMessage {
@@ -22,12 +34,17 @@ export interface ToolResult {
   callId: string;
   result: unknown;
   toolName?: string;
+  /** Set when the tool threw. The agent loop keeps going and shows this to the model. */
+  isError?: boolean;
 }
 
 export interface AISession {
   id: string;
   send(message: string, toolResults?: ToolResult[]): Promise<AIResponse>;
+  stream?(message: string): AsyncIterable<StreamChunk>;
   getHistory(): AIMessage[];
+  usage?(): { inputTokens: number; outputTokens: number; totalTokens: number };
+  budget?: TokenBudget;
 }
 
 export interface AIResponse {
@@ -77,9 +94,12 @@ export interface TokenBudget {
 
 export interface SessionConfig {
   model?: string;
+  /** Tried in order when `model` fails. */
+  models?: string[];
   systemPrompt?: string;
   tenantId?: string;
   userId?: string;
   tools?: ToolDefinition[];
   maxIterations?: number;
+  budget?: TokenBudget;
 }

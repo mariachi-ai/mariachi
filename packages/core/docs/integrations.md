@@ -1,70 +1,85 @@
 # Integrations
 
-How to add and configure third-party integrations in Mariachi.
+How to wrap a third-party API in Mariachi: validated functions with retries, credentials resolved
+per tenant, a registry you can call by name, and verified inbound webhooks. `integrations/slack/`
+is the reference implementation.
 
-## How to Add an Integration
+## Define a function
 
-1. **Generate the scaffold** (optional, if using `@mariachi/cli`):
+```ts
+import { defineIntegrationFn, resolveTenantCredential, type IntegrationContext } from '@mariachi/integrations';
 
-   ```bash
-   mariachi generate integration <name>
-   ```
+export const createIssue = defineIntegrationFn({
+  name: 'tracker.createIssue',
+  input: CreateIssueInput,            // Zod
+  output: CreateIssueOutput,          // Zod
+  retry: { attempts: 3, backoff: 'exponential' },
+  handler: async (input, ctx: IntegrationContext) => {
+    const token = await resolveTenantCredential(ctx, 'tracker.apiToken', ctx.secrets!, ctx.decrypt, { fallbackToGlobal: false });
+    return trackerClient(token).issues.create(input);
+  },
+});
+```
 
-2. **Define credentials** in `integrations/<name>/credentials.ts` using Zod:
+- Input is validated once, before the first attempt. Invalid input fails with
+  `integrations/invalid-input` and is never retried.
+- The handler is retried with `retry` from `@mariachi/core` (100 ms base delay). A missing
+  credential isn't retried; other errors are.
+- Output is validated after the call (`integrations/invalid-output`, HTTP 502), so a changed
+  upstream response is caught at the boundary.
+- Errors that aren't already `IntegrationError` become `integrations/call-failed` with the function
+  name.
 
-   ```ts
-   import { z } from 'zod';
+## Credentials
 
-   export const MyCredentials = z.object({
-     apiKey: z.string().min(1),
-     // ... other fields
-   });
+`resolveTenantCredential(ctx, key, secrets, decryptor?, options?)` reads the tenant's secret
+(`secrets.get(key, tenantId)`) and decrypts it with `@mariachi/encryption` when a decryptor is
+given. Store per-tenant credentials encrypted, never in plain config.
 
-   export type MyCredentials = z.infer<typeof MyCredentials>;
-   ```
+By default a tenant without its own secret falls back to the global one (`secrets.get(key)`). That
+suits integrations your platform owns (one Slack workspace for alerts). For credentials that must
+be the tenant's own (their Slack workspace, their CRM account), pass
+`{ fallbackToGlobal: false }`, so a missing tenant secret fails instead of silently using yours.
 
-3. **Define integration functions** in `integrations/<name>/index.ts` using `defineIntegrationFn`:
+## Register and call
 
-   ```ts
-   import { defineIntegrationFn } from '@mariachi/integrations';
-   import type { IntegrationContext } from '@mariachi/integrations';
-   import { MyCredentials } from './credentials';
-   import { InputSchema, OutputSchema } from './types';
+```ts
+const registry = new IntegrationRegistry();
+registry.register({
+  name: 'tracker',
+  description: 'Issue tracker',
+  credentialSchema: TrackerCredentials,
+  functions: ['tracker.createIssue'],
+  handlers: { createIssue },
+});
 
-   export interface MyIntegrationContext extends IntegrationContext {
-     credentials: MyCredentials;
-   }
+await registry.call('tracker.createIssue', input, integrationCtx);
+```
 
-   export const myAction = defineIntegrationFn({
-     name: 'my.action',
-     input: InputSchema,
-     output: OutputSchema,
-     handler: async (input, ctx) => {
-       const creds = (ctx as MyIntegrationContext).credentials;
-       // Call external API with creds
-       return result;
-     },
-     retry: { attempts: 3, backoff: 'exponential' },
-   });
-   ```
+- Every name in `functions` must have a handler, or `register` throws
+  `integrations/missing-handler`. The registry never lists something it can't call.
+- Registering the same integration twice throws `integrations/duplicate`.
+- `call` accepts `integration.fn`, or the bare `fn` when only one integration defines it. A bare
+  name used by several integrations throws `integrations/ambiguous-function`; an unknown one throws
+  `integrations/unknown-function`.
 
-4. **Register in the registry** (optional):
+## Inbound webhooks
 
-   ```ts
-   registry.register({
-     name: 'my',
-     description: 'My integration',
-     credentialSchema: MyCredentials,
-     functions: ['my.action'],
-   });
-   ```
+`defineWebhookHandler({ verify, parse, handle })` checks the request before parsing it. For Slack,
+verify with the signing secret over the raw body:
 
-## Credential Requirements
+```ts
+import { assertSlackSignature } from '@mariachi/integrations';
 
-- Credentials are validated with Zod schemas.
-- Store secrets via `@mariachi/config` (e.g., env adapter); never hardcode.
-- Each integration defines its own credential schema.
+assertSlackSignature(config.slack.signingSecret, headers, rawBody);   // throws integrations/invalid-signature
+```
+
+`verifySlackSignature` returns a boolean instead, and both reject requests more than five minutes
+old. Always pass the raw bytes (`ctx.request.rawBody` in a facade handler); re-serialized JSON won't
+match the signature. For a full webhook endpoint with dedup, see
+[recipes/add-webhook-endpoint.md](./recipes/add-webhook-endpoint.md).
 
 ## Step-by-step recipe
 
-For a full walkthrough with credentials, client, types, and tests, see [recipes/add-integration.md](./recipes/add-integration.md).
+For a full walkthrough with credentials, client, types and tests, see
+[recipes/add-integration.md](./recipes/add-integration.md).

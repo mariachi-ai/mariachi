@@ -5,6 +5,14 @@ export {
 } from './context';
 
 export {
+  runWithContext,
+  currentContext,
+  requireContext,
+  runWithSlot,
+  getSlot,
+} from './context-store';
+
+export {
   MariachiError,
   ConfigError,
   DatabaseError,
@@ -16,6 +24,7 @@ export {
   NotificationError,
   SearchError,
   EventsError,
+  RealtimeError,
   JobsError,
   RateLimitError,
   TenancyError,
@@ -24,19 +33,29 @@ export {
   IntegrationError,
   EncryptionError,
   LifecycleError,
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+  type ValidationIssue,
+  type ErrorEnvelope,
+  fromZodError,
+  isZodError,
   errorToHttpStatus,
+  toErrorEnvelope,
 } from './errors';
 
-export {
-  type Handler,
-  type Middleware,
-  type HandlerRegistration,
-  type PaginationParams,
-  type PaginatedResult,
-  type SortParams,
-  type Entity,
-  type BaseEntity,
-  type TenantEntity,
+export type {
+  Handler,
+  Middleware,
+  HandlerRegistration,
+  PaginationParams,
+  PaginatedResult,
+  CursorPaginationParams,
+  CursorPaginatedResult,
+  SortParams,
+  Entity,
+  BaseEntity,
+  TenantEntity,
 } from './types';
 
 export {
@@ -53,8 +72,12 @@ export {
 
 export {
   type Container,
+  type ServiceKey,
+  type AnyKey,
   createContainer,
+  createKey,
   getContainer,
+  setContainer,
   KEYS,
 } from './container';
 
@@ -63,6 +86,9 @@ export {
   type TracerAdapter,
   type MetricsAdapter,
   type Instrumentable,
+  type InstrumentationDeps,
+  type ResolvedInstrumentation,
+  resolveInstrumentation,
   withSpan,
   timed,
 } from './instrumentable';
@@ -70,9 +96,16 @@ export {
 export {
   type RetryConfig,
   DEFAULT_RETRY_CONFIG,
+  computeRetryDelay,
   retry,
+  withTimeout,
 } from './retry';
 
 export {
   type Disposable,
+  isDisposable,
 } from './disposable';
+
+export { loadOptionalPeer } from './optional';
+
+export { type IdempotencyStore, type IdempotencyClaim, InMemoryIdempotencyStore, runOnce } from './idempotency';

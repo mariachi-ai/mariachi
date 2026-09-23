@@ -1,52 +1,39 @@
-# Mariachi Core Patterns
+# Core patterns
 
-## 1. Adapter Factory
+## Composition root
 
-Every external dependency is behind an adapter. A factory function selects the implementation from config.
+One function builds the object graph: `src/main.ts` in a generated project. Nothing else constructs
+infrastructure. The order is:
 
-```ts
-const cache = createCache({ adapter: 'redis', url: process.env.REDIS_URL });
-const search = createSearch({ adapter: 'typesense', ... });
-const jobQueue = createJobQueue({ adapter: 'bullmq', redisUrl: ... }, logger);
-```
+1. `bootstrap()`: loads and validates config, creates logger/tracer/metrics/error tracker, registers
+   them in the container, installs signal handlers.
+2. Resources, registered with `lifecycle.manage(name, resource, { priority })`, connect at start and
+   disconnect in reverse order at shutdown.
+3. One `createCommunication()` per process, then every service's handlers.
+4. Transports (API server, job worker, webhook server) last, so they only accept work once everything
+   they call is up.
+5. `await lifecycle.start()`.
 
-Production adapters: Redis, PostgreSQL, Stripe, Typesense, BullMQ, Resend, S3, OpenAI.
-Test doubles live in `@mariachi/testing` (e.g. `TestCacheClient`, `TestEventBus`).
+The full walkthrough is in [recipes/wiring-and-bootstrap.md](./recipes/wiring-and-bootstrap.md).
 
-## 2. Abstract Service Class
+## DI container and typed keys
 
-Each package exposes: `X` (abstract) → `DefaultX extends X`. The abstract class layers observability, error handling, and hooks on top of raw adapters.
-
-```ts
-export abstract class Notifications implements Instrumentable { ... }
-export class DefaultNotifications extends Notifications { ... }
-```
-
-Subclass `DefaultX` when custom behavior is needed.
-
-## 3. Instrumentable & Disposable
-
-Two interfaces from `@mariachi/core` that every service implements:
-
-- **Instrumentable**: `{ logger, tracer?, metrics? }` — pulled from the DI container
-- **Disposable**: `{ connect(), disconnect(), isHealthy() }` — lifecycle management
-
-## 4. DI Container
-
-Global container via `getContainer()` with well-known `KEYS`:
+The container is a registry for things resolved at runtime (the logger in a hook, the communication
+layer in a controller factory). Constructors still take their dependencies explicitly.
 
 ```ts
-import { getContainer, KEYS } from '@mariachi/core';
-const container = getContainer();
-container.register(KEYS.Logger, logger);
-const logger = container.resolve<Logger>(KEYS.Logger);
+import { createKey, getContainer, KEYS } from '@mariachi/core';
+
+const PaymentsClient = createKey<PaymentsClient>('payments-client');
+getContainer().register(PaymentsClient, new PaymentsClient(options));
+const client = getContainer().resolve(PaymentsClient); // typed as PaymentsClient
 ```
 
-`bootstrap()` registers `Config` and `Logger` automatically. Other services register themselves as needed.
+`KEYS` holds the framework keys (`KEYS.Config`, `KEYS.Logger`, `KEYS.Communication`, ...).
+`resolve` throws on a missing key and `tryResolve` returns `undefined`. `createScope()` creates a child
+container, and `bootstrapForTest()` installs a fresh container and returns `restore()`.
 
-## 5. Context Propagation
-
-Every operation receives a `Context` carrying identity and tracing:
+## Context
 
 ```ts
 interface Context {
@@ -54,18 +41,62 @@ interface Context {
   userId: string | null;
   tenantId: string | null;
   scopes: string[];
-  identityType: string;
-  logger: Logger;
+  identityType: string; // 'user' | 'api-key' | 'service' | 'webhook' | 'job' | 'system' ...
+  logger: Logger;       // child logger bound to traceId/tenantId/userId
 }
 ```
 
-Never lose context between layers. Pass `ctx` through communication calls, service methods, and event handlers.
+HTTP servers build it from the request (identity from the auth strategy, `traceId` from the W3C
+`traceparent` header or the request id). Jobs and events carry a serialized copy in their envelope.
+Pass it explicitly as the first argument. `runWithContext(ctx, fn)` / `currentContext()` exist for code
+you can't change the signature of (logging hooks, ORM callbacks); they aren't a substitute for passing
+`ctx`.
 
-## 6. Zod Schemas at Boundaries
+## Abstract service classes and hooks
 
-Validate at entry points, not deep in business logic:
+Infrastructure packages expose `X` (abstract, instrumented) and `DefaultX` (ready to use). The
+abstract class adds spans, metrics, error normalization and hook methods on top of the raw adapter.
+Subclass to react to lifecycle points without wrapping every call:
 
-- **Controller**: parse request body with Zod before calling communication
-- **Handler registration**: declare `schema: { input, output }` with Zod schemas
-- **Job definition**: declare `schema` for job payload
-- **Config**: `AppConfigSchema` validates all configuration at load time
+```ts
+class AppJobs extends DefaultJobs {
+  protected async onJobFailed(ctx: Context, event: JobFailureEvent) {
+    if (event.final) await alerts.notify(ctx, `${event.jobName} dead-lettered`);
+  }
+}
+```
+
+## Disposable and lifecycle
+
+Anything holding a connection implements `Disposable`, `{ connect(), disconnect(), isHealthy() }`.
+`lifecycle.manage` wires all three into startup, shutdown and readiness. Clients passed in by the caller
+(a shared ioredis client, for example) are never closed by the component that borrowed them.
+
+## Adapter factory
+
+```ts
+const cache = createCache({ adapter: config.env === 'test' ? 'memory' : 'redis', url: config.redis?.url });
+```
+
+The factory is the only place that maps config to an implementation. Vendor SDKs are optional peer
+dependencies loaded on first use.
+
+## Idempotency
+
+External inputs arrive more than once: webhooks are retried, jobs are redelivered, events are
+at-least-once. Wrap side effects with `runOnce(store, key, fn)`, which returns
+`{ status: 'processed', result }`, `{ status: 'duplicate' }` or `{ status: 'in-progress' }`. Use
+`RedisIdempotencyStore` from `@mariachi/cache` in production and `InMemoryIdempotencyStore` in tests. Jobs also dedup at enqueue time with
+`enqueueWithDedup(ctx, name, data, key)`.
+
+## Retries and timeouts
+
+`retry(fn, { attempts, backoff, baseDelayMs, retryOn })` and `withTimeout(promise, ms)` from core are
+used by every package. Retry only transient failures: `retryOn` should reject validation, auth and
+other 4xx-class errors.
+
+## Result type
+
+`Result<T, E>` (`ok`, `err`, `tryCatch`, `map`, ...) is available for expected failures in pure logic.
+Across layers, throw typed errors instead; the HTTP envelope and job/event retry logic are built on
+them.

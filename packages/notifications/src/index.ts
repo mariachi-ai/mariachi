@@ -1,4 +1,5 @@
 import { ResendEmailAdapter } from './adapters/email/resend';
+import { SmtpEmailAdapter } from './adapters/email/smtp';
 import { NotificationError } from '@mariachi/core';
 import type { NotificationsConfig } from './notifications';
 import type {
@@ -14,6 +15,9 @@ import type {
   SMSAdapter,
   PushAdapter,
   NotificationPreferencesStore,
+  NotificationJob,
+  NotificationQueue,
+  DeliveryStore,
 } from './types';
 
 export type {
@@ -30,15 +34,31 @@ export type {
   SMSAdapter,
   PushAdapter,
   NotificationPreferencesStore,
+  NotificationJob,
+  NotificationQueue,
+  DeliveryStore,
 };
+export { NOTIFICATION_DISPATCH_JOB } from './types';
+export { notificationJobSchema } from './job-schema';
 export { renderTemplate } from './template';
 
 export { ResendEmailAdapter } from './adapters/email/resend';
+export { SmtpEmailAdapter, type SmtpEmailConfig } from './adapters/email/smtp';
+export { TwilioSmsAdapter, type TwilioSmsConfig } from './adapters/sms/twilio';
+export { FcmPushAdapter, type FcmPushConfig } from './adapters/push/fcm';
+export { MemoryInAppStore, MemoryPreferenceStore, MemoryDeliveryStore } from './store/memory';
 
-export function createEmailAdapter(config: { email?: { adapter: string; apiKey?: string; from?: string } }): EmailAdapter {
+export function createEmailAdapter(config: { email?: { adapter: string; apiKey?: string; from?: string; host?: string; port?: number } }): EmailAdapter {
   const emailConfig = config.email;
   if (!emailConfig) {
     throw new NotificationError('notifications/missing-email-config', 'Email config is required');
+  }
+  if (emailConfig.adapter === 'smtp') {
+    return new SmtpEmailAdapter({
+      host: emailConfig.host ?? '127.0.0.1',
+      port: emailConfig.port ?? 1025,
+      from: emailConfig.from ?? 'mariachi@localhost',
+    });
   }
   if (emailConfig.adapter === 'resend') {
     if (!emailConfig.apiKey) {

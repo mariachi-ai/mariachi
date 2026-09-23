@@ -36,6 +36,18 @@ export interface PaginatedResult<T> {
   totalPages: number;
 }
 
+/** Keyset pagination. `cursor` is the opaque `nextCursor` from the previous page. */
+export interface CursorPaginationParams {
+  limit: number;
+  cursor?: string | null;
+}
+
+export interface CursorPaginatedResult<T> {
+  data: T[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 export interface SortParams {
   field: string;
   direction: 'asc' | 'desc';

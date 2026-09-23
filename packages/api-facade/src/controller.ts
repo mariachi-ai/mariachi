@@ -1,59 +1,63 @@
-import type { RouteDefinition, HttpContext, AuthStrategy } from './types';
+import { ConfigError, type Context } from '@mariachi/core';
+import type { CommunicationLayer } from '@mariachi/communication';
+import { joinPath } from '@mariachi/server';
+import type { RouteDefinition, RouteHandler, RouteOpts, RouteSchemas } from './types';
 
-export interface RouteOpts {
-  auth?: AuthStrategy | AuthStrategy[] | false;
-  rateLimit?: { maxRequests: number; windowMs: number };
-}
+type Method = RouteDefinition['method'];
 
-export type RouteHandler = (
-  ctx: HttpContext,
-  body: unknown,
-  params: Record<string, string>,
-  query: Record<string, string>,
-) => Promise<unknown>;
-
+/**
+ * Groups routes under `prefix`. Paths passed to `get`/`post`/... are relative to the prefix.
+ * Controllers stay thin: validate with `schema`, then `this.call()` a communication procedure.
+ */
 export abstract class BaseController {
+  /** Path segment(s) prepended to every route, e.g. `users` or `v1/users`. Use '' for none. */
   abstract readonly prefix: string;
+  /** Default OpenAPI tags for this controller's routes. */
+  readonly tags?: string[];
 
   private _routes: RouteDefinition[] = [];
   private _initialized = false;
 
+  constructor(protected readonly communication?: CommunicationLayer) {}
+
   abstract init(): void;
 
-  protected post(path: string, handler: RouteHandler): void;
-  protected post(path: string, opts: RouteOpts, handler: RouteHandler): void;
-  protected post(path: string, optsOrHandler: RouteOpts | RouteHandler, handler?: RouteHandler): void {
-    this.addRoute('POST', path, optsOrHandler, handler);
+  /** Calls a communication procedure with the request context. */
+  protected call<T = unknown>(ctx: Context, procedure: string, input: unknown): Promise<T> {
+    if (!this.communication) {
+      throw new ConfigError('api/no-communication', `${this.constructor.name} was constructed without a communication layer`);
+    }
+    return (this.communication.call as (c: Context, n: string, i: unknown) => Promise<T>)(ctx, procedure, input);
   }
 
-  protected get(path: string, handler: RouteHandler): void;
-  protected get(path: string, opts: RouteOpts, handler: RouteHandler): void;
-  protected get(path: string, optsOrHandler: RouteOpts | RouteHandler, handler?: RouteHandler): void {
-    this.addRoute('GET', path, optsOrHandler, handler);
+  protected get<S extends RouteSchemas>(path: string, handler: RouteHandler<S>): void;
+  protected get<S extends RouteSchemas>(path: string, opts: RouteOpts<S>, handler: RouteHandler<S>): void;
+  protected get(path: string, a: RouteOpts | RouteHandler, b?: RouteHandler): void {
+    this.addRoute('GET', path, a, b);
   }
 
-  protected put(path: string, handler: RouteHandler): void;
-  protected put(path: string, opts: RouteOpts, handler: RouteHandler): void;
-  protected put(path: string, optsOrHandler: RouteOpts | RouteHandler, handler?: RouteHandler): void {
-    this.addRoute('PUT', path, optsOrHandler, handler);
+  protected post<S extends RouteSchemas>(path: string, handler: RouteHandler<S>): void;
+  protected post<S extends RouteSchemas>(path: string, opts: RouteOpts<S>, handler: RouteHandler<S>): void;
+  protected post(path: string, a: RouteOpts | RouteHandler, b?: RouteHandler): void {
+    this.addRoute('POST', path, a, b);
   }
 
-  protected patch(path: string, handler: RouteHandler): void;
-  protected patch(path: string, opts: RouteOpts, handler: RouteHandler): void;
-  protected patch(path: string, optsOrHandler: RouteOpts | RouteHandler, handler?: RouteHandler): void {
-    this.addRoute('PATCH', path, optsOrHandler, handler);
+  protected put<S extends RouteSchemas>(path: string, handler: RouteHandler<S>): void;
+  protected put<S extends RouteSchemas>(path: string, opts: RouteOpts<S>, handler: RouteHandler<S>): void;
+  protected put(path: string, a: RouteOpts | RouteHandler, b?: RouteHandler): void {
+    this.addRoute('PUT', path, a, b);
   }
 
-  protected delete(path: string, handler: RouteHandler): void;
-  protected delete(path: string, opts: RouteOpts, handler: RouteHandler): void;
-  protected delete(path: string, optsOrHandler: RouteOpts | RouteHandler, handler?: RouteHandler): void {
-    this.addRoute('DELETE', path, optsOrHandler, handler);
+  protected patch<S extends RouteSchemas>(path: string, handler: RouteHandler<S>): void;
+  protected patch<S extends RouteSchemas>(path: string, opts: RouteOpts<S>, handler: RouteHandler<S>): void;
+  protected patch(path: string, a: RouteOpts | RouteHandler, b?: RouteHandler): void {
+    this.addRoute('PATCH', path, a, b);
   }
 
-  protected buildPath(subpath?: string): string {
-    const base = `/${this.prefix}`;
-    if (!subpath) return base;
-    return `${base}/${subpath}`;
+  protected delete<S extends RouteSchemas>(path: string, handler: RouteHandler<S>): void;
+  protected delete<S extends RouteSchemas>(path: string, opts: RouteOpts<S>, handler: RouteHandler<S>): void;
+  protected delete(path: string, a: RouteOpts | RouteHandler, b?: RouteHandler): void {
+    this.addRoute('DELETE', path, a, b);
   }
 
   routes(): RouteDefinition[] {
@@ -64,22 +68,14 @@ export abstract class BaseController {
     return this._routes;
   }
 
-  private addRoute(
-    method: RouteDefinition['method'],
-    path: string,
-    optsOrHandler: RouteOpts | RouteHandler,
-    handler?: RouteHandler,
-  ): void {
-    const isHandler = typeof optsOrHandler === 'function';
-    const opts: RouteOpts = isHandler ? {} : optsOrHandler as RouteOpts;
-    const fn: RouteHandler = isHandler ? optsOrHandler as RouteHandler : handler!;
-
-    this._routes.push({
-      method,
-      path,
-      handler: fn,
-      auth: opts.auth,
-      rateLimit: opts.rateLimit,
-    });
+  private addRoute(method: Method, path: string, a: RouteOpts | RouteHandler, b?: RouteHandler): void {
+    const opts: RouteOpts = typeof a === 'function' ? {} : a;
+    const handler = (typeof a === 'function' ? a : b) as RouteHandler | undefined;
+    if (!handler) throw new ConfigError('api/missing-handler', `Route ${method} ${path} has no handler`);
+    const fullPath = joinPath(this.prefix, path);
+    if (this._routes.some((r) => r.method === method && r.path === fullPath)) {
+      throw new ConfigError('api/duplicate-route', `Duplicate route ${method} ${fullPath}`);
+    }
+    this._routes.push({ ...opts, tags: opts.tags ?? this.tags, method, path: fullPath, handler });
   }
 }

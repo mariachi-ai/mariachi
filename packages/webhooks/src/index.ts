@@ -1,4 +1,4 @@
-export { WebhookServer } from './server';
+export { WebhookServer, redactHeaders } from './server';
 export type { WebhookServerConfig, WebhookServerDeps } from './server';
 export { WebhookController } from './controller';
 export type { WebhookContext, WebhookRouteOpts, WebhookHandler, WebhookRouteDefinition } from './types';

@@ -1,169 +1,118 @@
-# Recipe: Add a Webhook Endpoint
+# Recipe: add a webhook endpoint
 
-This walks through creating a webhook endpoint that receives callbacks from third-party services (e.g. Stripe, GitHub). Mariachi's `@mariachi/webhooks` package provides `WebhookController` with two processing modes: `direct` (synchronous via communication layer) and `queue` (asynchronous via job queue).
-
----
-
-## Overview
+Goal: receive GitHub `push` deliveries, verify their signature, acknowledge fast, and process them in a
+job with retries.
 
 ```
-Third-party POST → WebhookServer → AuthController.auth() → WebhookController handler
-                                                            ├── mode: 'direct' → communication.call(procedure, payload)
-                                                            └── mode: 'queue'  → jobQueue.enqueue(jobName, payload)
+POST /webhooks/github/events
+  → WebhookServer: raw body captured, request logged (secrets redacted)
+  → SignatureAuthController: HMAC over the raw bytes, constant-time compare
+  → dedup on the delivery id (idempotency store)
+  → route handler: returns the payload
+  → mode 'queue': enqueue job, respond 202    |    mode 'direct': communication.call(procedure), respond 200
 ```
 
-All webhooks are logged via `WebhookLogStore`.
+Prefer `queue` mode for anything slower than a few hundred milliseconds or anything that calls other
+APIs. Providers time out and retry quickly; the job gives you your own retries and a dead-letter queue.
 
----
-
-## 1. Create an Auth Controller
-
-Each webhook controller needs an `AuthController` that verifies the incoming request. Extend either `ApiKeyAuthController` or `OAuthAuthController`.
-
-**File:** e.g. `src/webhooks/github-auth.ts`
+## 1. Verify the signature: `src/webhooks/github.auth.ts`
 
 ```ts
-import type { RequestContext } from '@mariachi/server';
-import { ApiKeyAuthController } from '@mariachi/webhooks';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import { SignatureAuthController } from '@mariachi/webhooks';
 
-export class GitHubWebhookAuth extends ApiKeyAuthController {
+export class GitHubWebhookAuth extends SignatureAuthController {
   readonly provider = 'github';
-  protected readonly headerName = 'x-hub-signature-256';
+  readonly signatureHeader = 'x-hub-signature-256';
+  protected readonly eventIdHeader = 'x-github-delivery';   // enables dedup
 
-  protected async verify(signature: string, ctx: RequestContext): Promise<boolean> {
-    // Verify the HMAC signature against the webhook secret
-    return signature.length > 0;
+  constructor(private readonly secret: string) {
+    super();
+  }
+
+  protected async verifySignature(signature: string, rawBody: Buffer): Promise<boolean> {
+    const expected = `sha256=${createHmac('sha256', this.secret).update(rawBody).digest('hex')}`;
+    const a = Buffer.from(signature);
+    const b = Buffer.from(expected);
+    return a.length === b.length && timingSafeEqual(a, b);
   }
 }
 ```
 
-**Auth controller types:**
-- `ApiKeyAuthController` — verifies a header value. Override `headerName` for custom headers.
-- `OAuthAuthController` — verifies a Bearer token.
-- Custom: extend `AuthController` directly and implement `auth(req, ctx)`.
+Always verify over `rawBody`, never over re-serialized JSON: key order and whitespace change the bytes.
+Override `resolveTenant(req)` if a delivery maps to a tenant (for example, from a path parameter). For
+generic HMAC schemes, `hmacSignatureStrategy` in api-facade does the same thing without a class.
+Provider packages ship ready-made controllers (`ClerkWebhookController`, `FusionAuthWebhookHandler`),
+and billing verifies Stripe signatures itself.
 
----
-
-## 2. Create the Webhook Controller
-
-Extend `WebhookController` with a `prefix`, `auth`, and route definitions in `init()`.
-
-**File:** e.g. `src/webhooks/github.controller.ts`
+## 2. Route: `src/webhooks/github.controller.ts`
 
 ```ts
-import { WebhookController, type WebhookContext, type WebhookRouteOpts } from '@mariachi/webhooks';
-import { GitHubWebhookAuth } from './github-auth';
+import { WebhookController } from '@mariachi/webhooks';
+import { GitHubWebhookAuth } from './github.auth';
 
 export class GitHubWebhookController extends WebhookController {
   readonly prefix = 'github';
-  readonly auth = new GitHubWebhookAuth();
 
-  init() {
-    this.post(this.buildPath('push'), {
-      mode: 'direct',
-      procedure: 'github.handlePush',
-      ttl: '30d',
-    }, this.handlePush);
-
-    this.post(this.buildPath('issue'), {
-      mode: 'queue',
-      jobName: 'github.processIssue',
-      ttl: '30d',
-    }, this.handleIssue);
+  constructor(readonly auth: GitHubWebhookAuth) {
+    super();
   }
 
-  handlePush = async (ctx: WebhookContext, body: unknown) => {
-    ctx.logger.info('Received GitHub push webhook');
-    return body;
-  };
-
-  handleIssue = async (ctx: WebhookContext, body: unknown) => {
-    ctx.logger.info('Received GitHub issue webhook');
-    return body;
-  };
+  init(): void {
+    this.post('/events', { mode: 'queue', jobName: 'github-push', ttl: '30d' }, async (ctx, body) => {
+      const event = pushEventSchema.parse(body);             // validate at the boundary
+      return { repository: event.repository.full_name, commits: event.commits.length };
+    });
+  }
 }
 ```
 
-**Route options (`WebhookRouteOpts`):**
+The handler's return value becomes the job payload (or the procedure input in `direct` mode). Set
+`logPayload: false` on routes whose bodies carry personal data.
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `mode` | Yes | `'direct'` (sync) or `'queue'` (async) |
-| `procedure` | When `mode: 'direct'` | Communication procedure name |
-| `jobName` | When `mode: 'queue'` | Job name for `@mariachi/jobs` |
-| `ttl` | No | Log retention duration (e.g. `'7d'`, `'30d'`) |
-
----
-
-## 3. Register on a WebhookServer
-
-**File:** e.g. `src/index.ts`
+## 3. Job: `src/jobs/github-push.job.ts`
 
 ```ts
-import { WebhookServer } from '@mariachi/webhooks';
-import { GitHubWebhookController } from './webhooks/github.controller';
-
-const webhookServer = new WebhookServer(
-  { name: 'webhooks', defaultTtl: '7d' },
-  { communication, jobQueue, logStore },
-);
-
-webhookServer.registerController(new GitHubWebhookController());
-
-startup.register({
-  name: 'webhook-server',
-  priority: 100,
-  fn: async () => {
-    await webhookServer.listen(WEBHOOK_PORT);
-  },
+export const githubPushJob = defineJob({
+  name: 'github-push',
+  schema: z.object({ repository: z.string(), commits: z.number().int() }),
+  retry: { attempts: 5, backoff: 'exponential', delay: 2_000 },
+  handler: async (ctx, data) => { /* ... */ },
 });
 ```
 
----
+Register it in `src/jobs/index.ts` (`mariachi generate job github-push` does this). The job id is
+derived from the provider's delivery id, so a redelivery that slips past the idempotency store still
+doesn't enqueue twice.
 
-## 4. Register the Handler or Job
-
-**For `mode: 'direct'`** — register a communication handler:
-
-```ts
-communication.register('github.handlePush', {
-  schema: { input: GitHubPushInput, output: z.object({ ok: z.boolean() }) },
-  handler: async (ctx, input) => {
-    return { ok: true };
-  },
-});
-```
-
-**For `mode: 'queue'`** — register a job:
+## 4. Server: in `src/main.ts`
 
 ```ts
-export const ProcessGitHubIssueJob = {
-  name: 'github.processIssue',
-  schema: z.object({ action: z.string(), issue: z.object({ id: z.number() }) }),
-  retry: { attempts: 3, backoff: 'exponential' as const },
-  handler: async (data, ctx) => {
-    ctx.logger.info({ issueId: data.issue.id }, 'Processing GitHub issue');
+const jobBackend = createJobQueue({ adapter: 'bullmq', redisUrl: config.redis.url, prefix: config.serviceName }, logger);
+const jobs = new DefaultJobs({ queue: jobBackend }, instrumentation);   // the generated main.ts already has this
+
+const webhooks = new WebhookServer(
+  { name: 'webhooks', prefix: '/webhooks', logger },
+  {
+    jobQueue: jobBackend,                               // queue mode
+    communication,                                      // direct mode
+    idempotency: new RedisIdempotencyStore(redis),      // dedup by provider + delivery id
   },
-};
+).registerController(new GitHubWebhookController(new GitHubWebhookAuth(secrets.GITHUB_WEBHOOK_SECRET)));
+
+lifecycle.startup.register({ name: 'webhooks', priority: 100, fn: async () => void (await webhooks.listen(config.server.webhookPort)) });
+lifecycle.shutdown.register({ name: 'webhooks', priority: 100, fn: () => webhooks.close() });
 ```
 
----
+Run webhooks on their own port (`WEBHOOK_PORT`, default 3002) so API auth and rate limits don't apply to
+them and they can be exposed separately. Add `logStore` (`RepositoryWebhookLogStore` over the
+`webhookLogsTable` schema) to keep an audit trail of deliveries.
 
-## When to Use Direct vs Queue
+## 5. Test
 
-| | Direct (`mode: 'direct'`) | Queue (`mode: 'queue'`) |
-|-|---------------------------|-------------------------|
-| **Use when** | Response must be synchronous | Processing is slow or can be retried |
-| **Backed by** | `communication.call()` | `jobQueue.enqueue()` (BullMQ/Redis) |
-| **Retries** | No built-in retry | BullMQ retry with backoff |
+Use `webhooks.inject({ method: 'POST', url: '/webhooks/github/events', headers, payload })` with a body
+signed using the test secret. Assert:
 
----
-
-## Checklist
-
-- [ ] Auth controller created (extends `ApiKeyAuthController` or `OAuthAuthController`)
-- [ ] Webhook controller created with `prefix`, `auth`, and routes in `init()`
-- [ ] Routes configured with correct `mode`, `procedure`/`jobName`, and optional `ttl`
-- [ ] Controller registered on `WebhookServer`
-- [ ] Communication handler or job registered for each route
-- [ ] Webhook secret stored via `@mariachi/config` (never hardcoded)
+- a valid signature returns 202 and enqueues exactly one job;
+- a bad or missing signature returns 401;
+- the same delivery id sent twice returns `{ duplicate: true }` the second time.

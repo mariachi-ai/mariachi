@@ -27,8 +27,17 @@ export async function runAgent(
     const toolResults: ToolResult[] = [];
     for (const tc of lastResponse.toolCalls) {
       onToolCall?.(tc);
-      const result = await registry.execute(tc.name, tc.arguments);
-      toolResults.push({ callId: tc.id, result, toolName: tc.name });
+      try {
+        const result = await registry.execute(tc.name, tc.arguments);
+        toolResults.push({ callId: tc.id, result, toolName: tc.name });
+      } catch (error) {
+        toolResults.push({
+          callId: tc.id,
+          toolName: tc.name,
+          isError: true,
+          result: { error: error instanceof Error ? error.message : String(error) },
+        });
+      }
     }
     lastResponse = await session.send('', toolResults);
     iterations++;

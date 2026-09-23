@@ -1,250 +1,100 @@
-# Recipe: Wiring and Bootstrap
+# Recipe: wiring and bootstrap
 
-This shows the full initialization sequence for a Mariachi application — from loading config to accepting requests. Understanding the wiring order is critical because components depend on each other: communication handlers must be registered before controllers call them, and infrastructure (DB, Redis) must connect before services that use them.
+`mariachi init` generates `src/main.ts`, a working composition root. This recipe explains its order and
+shows how to add resources and split processes.
 
----
-
-## Initialization Order
+## Order
 
 ```
-1. Load config              loadConfig() or bootstrap()
-2. Create observability     createObservability() → logger, tracer, metrics
-3. Register in container    container.register(KEYS.Logger, logger) etc.
-4. Create infrastructure   createPostgresDatabase(), createCache(), createEventBus()
-5. Register infra in DI     container.register(KEYS.Database, db) etc.
-6. Create communication     createCommunication()
-7. Register handlers        registerServiceHandlers(communication)
-8. Create servers           new FastifyAdapter() with auth + rate limiting
-9. Register controllers     server.registerController(new XxxController())
-10. Connect infra           startup hooks: db.connect(), cache.connect()
-11. Start servers           server.listen(port)
+1. bootstrap()                    config (validated), logger, tracer, metrics, error tracker, secrets,
+                                  container registrations, signal handlers
+2. resources                      lifecycle.manage(name, resource, { priority })
+                                  database 10 → cache 15 → jobs/events 20 → ...
+3. communication                  createCommunication(); register it as KEYS.Communication
+4. services + handlers            registerServices(communication, deps)
+5. transports                     API server, webhook server, WebSocket adapter, job worker
+                                  (startup hooks with priority ≥ 90)
+6. lifecycle.start()              runs startup hooks in ascending priority, then marks the process started
 ```
 
-Steps 6-7 must happen before 8-9. If a controller calls `communication.call('users.create', ...)` but no handler is registered for `users.create`, it will fail at runtime.
+Shutdown (SIGTERM/SIGINT) runs the hooks in reverse: transports stop accepting work first, then jobs
+drain, then connections close. Readiness (`/api/health/ready`) reports unhealthy while starting and
+while draining, so load balancers stop routing before connections close.
 
----
-
-## Minimal Bootstrap
-
-The simplest wiring uses `bootstrap()` from `@mariachi/lifecycle`, which handles steps 1-3:
+## The generated main.ts, annotated
 
 ```ts
-import { bootstrap } from '@mariachi/lifecycle';
-import { createCommunication } from '@mariachi/communication';
-import { registerServiceHandlers } from './services';
-import { FastifyAdapter } from '@mariachi/api-facade';
-import { UsersController } from './controllers/users.controller';
+const { config, logger, tracer, metrics, container, lifecycle } = bootstrap();
+const instrumentation = { logger, tracer, metrics };
 
-async function main() {
-  const { logger, startup, shutdown } = bootstrap();
+// Fail at boot, not on the first request.
+if (!config.database) throw new ConfigError('app/database-required', 'DATABASE_URL is required');
 
-  const communication = createCommunication();
-  registerServiceHandlers(communication);
+const database = lifecycle.manage('database', createPostgresDatabase({ url: config.database.url }), { priority: 10 });
 
-  const server = new FastifyAdapter({ name: 'public' })
-    .withAuth(['session', 'api-key'])
-    .withRateLimit({ perUser: 1000, perApiKey: 5000, window: '1h' });
+const jobs = new DefaultJobs({ queue: createJobQueue({ adapter: 'bullmq', redisUrl: config.redis.url, prefix: config.serviceName }, logger) }, instrumentation);
+for (const job of jobDefinitions) jobs.registerJob(job);
+lifecycle.manage('jobs', jobs, { priority: 20 });
+lifecycle.startup.register({ name: 'jobs-worker', priority: 90, fn: () => jobs.start() });
 
-  server.registerController(new UsersController());
+const communication = createCommunication({}, instrumentation);
+container.register(KEYS.Communication, communication);
+registerServices(communication, { db: database.db, jobs });
 
-  startup.register({
-    name: 'server',
-    priority: 100,
-    fn: async () => {
-      await server.listen(3000);
-      logger.info({ port: 3000 }, 'Server started');
-    },
-  });
+const api = createApiServer({ name: 'api', prefix: '/api', logger, tracer })
+  .withAuthStrategy('session', bearerStrategy(new JWTAdapter({ secret: config.auth.jwtSecret })))
+  .withAuth('session')
+  .withHealth(lifecycle.health)
+  .withOpenApi({ info: { title: config.serviceName, version: '0.1.0' } });
+for (const controller of createControllers(communication)) api.registerController(controller);
+lifecycle.startup.register({ name: 'api', priority: 100, fn: () => api.listen(config.server.port, config.server.host) });
+lifecycle.shutdown.register({ name: 'api', priority: 100, fn: () => api.close() });
 
-  shutdown.register({
-    name: 'server',
-    priority: 100,
-    fn: () => server.close(),
-  });
-
-  await startup.runAll(logger);
-}
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+await lifecycle.start();
 ```
 
----
+Handlers are registered before any transport starts, so no request can reach an unregistered
+procedure. A controller calling a name nobody registered fails with `communication/not-found`.
 
-## Full Bootstrap (with all infrastructure)
+## Adding resources
 
-For a production app that needs database, cache, events, auth, and billing:
+Add each resource to `ServiceDeps` in `src/services/index.ts` and pass it in from `main.ts`.
 
 ```ts
-import { getContainer, KEYS } from '@mariachi/core';
-import { loadConfig } from '@mariachi/config';
-import { createObservability } from '@mariachi/observability';
-import { bootstrap } from '@mariachi/lifecycle';
-import { createPostgresDatabase } from '@mariachi/database-postgres';
-import { createCache } from '@mariachi/cache';
-import { createEventBus } from '@mariachi/events';
-import { createAuth } from '@mariachi/auth';
-import { createRateLimiter } from '@mariachi/rate-limit';
-import { createCommunication } from '@mariachi/communication';
+const cacheConfig = { adapter: 'redis', url: config.redis.url, prefix: config.serviceName };
+const cache = lifecycle.manage(
+  'cache',
+  new DefaultCache({ client: createCache(cacheConfig), lock: createLock(cacheConfig) }, instrumentation), // lock enables stampede protection
+  { priority: 15 },
+);
 
-async function main() {
-  const config = loadConfig();
+const bus = lifecycle.manage('event-bus', createEventBus({ adapter: 'redis-streams', url: config.redis.url }), { priority: 20 });
+const events = new DefaultEvents({ bus, source: config.serviceName }, instrumentation);
 
-  const { logger, tracer, metrics } = createObservability({
-    logging: { adapter: 'pino', level: 'info' },
-  });
-
-  const container = getContainer();
-  container.register(KEYS.Config, config);
-  container.register(KEYS.Logger, logger);
-  container.register(KEYS.Tracer, tracer);
-  container.register(KEYS.Metrics, metrics);
-
-  const db = createPostgresDatabase({ url: config.database.url });
-  container.register(KEYS.Database, db);
-
-  const cache = createCache({ adapter: 'redis', url: config.redis!.url });
-  container.register(KEYS.Cache, cache);
-
-  const events = createEventBus({ adapter: 'redis', url: config.redis!.url });
-  container.register(KEYS.EventBus, events);
-
-  const auth = createAuth({ adapter: 'jwt', jwtSecret: config.auth!.jwtSecret! });
-  container.register(KEYS.Auth, auth);
-
-  const rateLimiter = createRateLimiter({ adapter: 'redis', url: config.redis!.url });
-  container.register(KEYS.RateLimit, rateLimiter);
-
-  const { startup, shutdown, health } = bootstrap();
-
-  const communication = createCommunication();
-  container.register(KEYS.Communication, communication);
-  registerServiceHandlers(communication);
-
-  const publicServer = new FastifyAdapter({ name: 'public' })
-    .withAuth(['session', 'api-key'])
-    .withRateLimit({ perUser: 1000, perApiKey: 5000, window: '1h' });
-
-  publicServer.registerController(new UsersController());
-  publicServer.registerController(new OrdersController());
-
-  startup.register({ name: 'database', priority: 1, fn: () => db.connect() });
-  startup.register({ name: 'cache', priority: 2, fn: () => cache.connect() });
-  startup.register({ name: 'events', priority: 3, fn: () => events.connect() });
-
-  startup.register({ name: 'servers', priority: 100, fn: async () => {
-    await publicServer.listen(3000);
-    logger.info({ port: 3000 }, 'Server started');
-  }});
-
-  shutdown.register({ name: 'servers', priority: 1, fn: () => publicServer.close() });
-  shutdown.register({ name: 'events', priority: 10, fn: () => events.disconnect() });
-  shutdown.register({ name: 'cache', priority: 20, fn: () => cache.disconnect() });
-  shutdown.register({ name: 'database', priority: 30, fn: () => db.disconnect() });
-
-  await startup.runAll(logger);
-}
+lifecycle.manage('outbox-relay', new OutboxRelay({ db: database.db, target: events, logger }), { priority: 95 });
 ```
 
----
+Components that accept an existing client (`client: redis`) never close it; the owner closes it.
+Mark a resource `{ critical: false }` when readiness should report `degraded` instead of `unhealthy`
+if it's down (a search index, for example).
 
-## Startup/Shutdown Priorities
+## Splitting API and worker
 
-Hooks run in order of priority (lowest first). Convention:
+Keep one `src/bootstrap.ts` that builds resources and registers services, then two entry points:
 
-| Priority | Phase | What |
-|----------|-------|------|
-| 1-10 | Infrastructure | Database, cache, event bus connections |
-| 50 | Services | Communication handler registration, event subscribers |
-| 100 | Servers | HTTP server listen, WebSocket server start |
+- `src/api.ts`: bootstrap, then the API server. Don't call `jobs.start()`; it enqueues only.
+- `src/worker.ts`: bootstrap, register all job definitions and schedules, then `jobs.start()`. No HTTP
+  server except a health endpoint if your platform needs one.
 
-For shutdown, use the inverse: stop servers first (priority 1), then services, then infrastructure.
+Both processes register the same handlers, so jobs call services directly or through
+`communication.call`, exactly like controllers.
 
----
-
-## Worker Bootstrap
-
-Workers follow the same pattern but with job queues:
+## Tests
 
 ```ts
-import { bootstrap } from '@mariachi/lifecycle';
-import { createJobQueue } from '@mariachi/jobs';
-import { SendEmailJob } from './jobs/send-email.job';
-import { schedules } from './jobs/schedules';
-
-const { config, logger, startup, shutdown } = bootstrap();
-
-const jobQueue = createJobQueue({
-  adapter: 'bullmq',
-  redisUrl: config.redis!.url,
-}, logger);
-
-jobQueue.registerJob(SendEmailJob);
-for (const schedule of schedules) {
-  jobQueue.register(schedule);
-}
-
-startup.register({
-  name: 'job-queue',
-  priority: 10,
-  fn: async () => {
-    await jobQueue.connect();
-    await jobQueue.start();
-  },
-});
-
-shutdown.register({
-  name: 'job-queue',
-  priority: 10,
-  fn: async () => {
-    await jobQueue.stop();
-    await jobQueue.disconnect();
-  },
-});
-
-startup.runAll(logger).catch((err) => {
-  logger.error({ err }, 'Worker failed to start');
-  process.exit(1);
-});
+const app = bootstrapForTest({ config: { serviceName: 'test' } });   // fresh container, no signal handlers, env ignored
+const communication = createCommunication();
+registerServices(communication, { db, jobs: new DefaultJobs({ queue: createJobQueue({ adapter: 'memory' }, app.logger) }) });
+// ... communication.call(ctx, 'notes.create', input)
+app.restore();
 ```
-
----
-
-## DI Container Keys
-
-All well-known keys are defined in `@mariachi/core`:
-
-```ts
-import { KEYS } from '@mariachi/core';
-
-KEYS.Config          // AppConfig
-KEYS.Logger          // Logger
-KEYS.Tracer          // TracerAdapter
-KEYS.Metrics         // MetricsAdapter
-KEYS.Database        // Database / PostgresAdapter
-KEYS.Cache           // Cache / CacheClient
-KEYS.EventBus        // EventBus
-KEYS.JobQueue        // JobQueue
-KEYS.Auth            // Auth
-KEYS.Communication   // CommunicationLayer
-// ... and others
-```
-
-Services that extend `Instrumentable` automatically resolve `Logger`, `Tracer`, and `Metrics` from the container.
-
----
-
-## Checklist
-
-- [ ] Config loaded and validated
-- [ ] Logger + tracer + metrics created and registered in container
-- [ ] Infrastructure created (DB, cache, events) and registered in container
-- [ ] Communication layer created
-- [ ] Service handlers registered on communication layer
-- [ ] Servers created with auth and rate limiting
-- [ ] Controllers registered on servers
-- [ ] Startup hooks registered (infra connect at low priority, servers at high priority)
-- [ ] Shutdown hooks registered (reverse order)
-- [ ] `startup.runAll(logger)` called

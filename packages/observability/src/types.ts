@@ -1,29 +1,15 @@
-export interface Span {
-  setAttribute(key: string, value: string | number | boolean): void;
-  setStatus(status: 'ok' | 'error', message?: string): void;
-  end(): void;
-}
-
-export interface TracerAdapter {
-  startSpan(name: string, attributes?: Record<string, string>): Span;
-  withSpan<T>(name: string, fn: (span: Span) => Promise<T>): Promise<T>;
-}
-
-export interface MetricsAdapter {
-  increment(name: string, value?: number, tags?: Record<string, string>): void;
-  gauge(name: string, value: number, tags?: Record<string, string>): void;
-  histogram(name: string, value: number, tags?: Record<string, string>): void;
-  timing(name: string, value: number, tags?: Record<string, string>): void;
-}
+export type { Span, TracerAdapter, MetricsAdapter } from '@mariachi/core';
 
 export interface ErrorTracker {
   captureException(error: Error, context?: Record<string, unknown>): void;
   captureMessage(message: string, level: 'info' | 'warning' | 'error'): void;
+  flush?(timeoutMs?: number): Promise<boolean>;
 }
 
 export interface ObservabilityConfig {
+  serviceName?: string;
   logging?: { adapter?: string; level?: string };
-  tracing?: { adapter?: string; endpoint?: string };
-  metrics?: { adapter?: string };
-  errors?: { adapter?: string; dsn?: string };
+  tracing?: { adapter?: string; endpoint?: string; serviceName?: string };
+  metrics?: { adapter?: string; prefix?: string };
+  errors?: { adapter?: string; dsn?: string; environment?: string; release?: string };
 }

@@ -1,5 +1,5 @@
-import type { Context } from '@mariachi/core';
-import type { Entity, PaginatedResult, PaginationParams, QueryFilter, FilterCondition, Repository, SortParams } from '../types';
+import { NotFoundError, type Context } from '@mariachi/core';
+import type { CursorPaginatedResult, CursorPaginationParams, Entity, FilterCondition, FindOptions, PaginatedResult, PaginationParams, QueryFilter, Repository, SortParams } from '../types';
 
 export class TestRepository<T extends Entity> implements Repository<T> {
   private readonly store: T[] = [];
@@ -51,7 +51,7 @@ export class TestRepository<T extends Entity> implements Repository<T> {
 
   private excludeDeleted(items: T[]): T[] {
     return items.filter((i) => {
-      const deletedAt = (i as Record<string, unknown>)['deletedAt'];
+      const deletedAt = (i as Record<string, unknown>).deletedAt;
       return deletedAt === undefined || deletedAt === null;
     });
   }
@@ -85,13 +85,14 @@ export class TestRepository<T extends Entity> implements Repository<T> {
     return item ?? null;
   }
 
-  async findMany(ctx: Context, filter?: QueryFilter<T>, sort?: SortParams): Promise<T[]> {
+  async findMany(ctx: Context, filter?: QueryFilter<T>, sort?: SortParams | FindOptions): Promise<T[]> {
     let items = this.excludeDeleted(this.filterByContext(ctx, this.store));
     items = items.filter((i) => this.matchesFilter(i, filter));
-    return this.applySort(items, sort);
+    const resolved = sort && 'field' in sort ? sort : Array.isArray(sort?.sort) ? sort.sort[0] : sort?.sort;
+    return this.applySort(items, resolved);
   }
 
-  async create(ctx: Context, data: Omit<T, 'id'>): Promise<T> {
+  async create(ctx: Context, data: Partial<T>): Promise<T> {
     const entity = {
       ...data,
       id: crypto.randomUUID(),
@@ -104,7 +105,7 @@ export class TestRepository<T extends Entity> implements Repository<T> {
   async update(ctx: Context, id: string, data: Partial<Omit<T, 'id'>>): Promise<T> {
     const filtered = this.filterByContext(ctx, this.store);
     const idx = this.store.findIndex((i) => i.id === id && filtered.includes(i));
-    if (idx === -1) throw new Error(`Entity not found: ${id}`);
+    if (idx === -1) throw new NotFoundError('testing/not-found', `Entity not found: ${id}`);
     const updated = { ...this.store[idx], ...data } as T;
     this.store[idx] = updated;
     return updated;
@@ -114,7 +115,7 @@ export class TestRepository<T extends Entity> implements Repository<T> {
     const filtered = this.filterByContext(ctx, this.store);
     const item = filtered.find((i) => i.id === id);
     if (!item) return;
-    (item as Record<string, unknown>)['deletedAt'] = new Date();
+    (item as Record<string, unknown>).deletedAt = new Date();
   }
 
   async hardDelete(ctx: Context, id: string): Promise<void> {
@@ -151,14 +152,62 @@ export class TestRepository<T extends Entity> implements Repository<T> {
     return items.length;
   }
 
-  async deleteWhere(ctx: Context, filter: QueryFilter<T>): Promise<number> {
+  async getById(ctx: Context, id: string): Promise<T> {
+    const item = await this.findById(ctx, id);
+    if (!item) throw new NotFoundError('testing/not-found', `Entity not found: ${id}`);
+    return item;
+  }
+
+  async findOne(ctx: Context, filter: QueryFilter<T>): Promise<T | null> {
+    const [first] = await this.findMany(ctx, filter);
+    return first ?? null;
+  }
+
+  async exists(ctx: Context, filter: QueryFilter<T>): Promise<boolean> {
+    return (await this.count(ctx, filter)) > 0;
+  }
+
+  async createMany(ctx: Context, data: Partial<T>[]): Promise<T[]> {
+    const created: T[] = [];
+    for (const row of data) created.push(await this.create(ctx, row));
+    return created;
+  }
+
+  async updateWhere(ctx: Context, filter: QueryFilter<T>, data: Partial<Omit<T, 'id'>>): Promise<number> {
+    const matches = await this.findMany(ctx, filter);
+    for (const item of matches) await this.update(ctx, item.id, data);
+    return matches.length;
+  }
+
+  async restore(ctx: Context, id: string): Promise<T> {
+    const item = this.filterByContext(ctx, this.store).find((i) => i.id === id);
+    if (!item) throw new NotFoundError('testing/not-found', `Entity not found: ${id}`);
+    (item as Record<string, unknown>).deletedAt = null;
+    return item;
+  }
+
+  async paginateCursor(ctx: Context, params: CursorPaginationParams, filter?: QueryFilter<T>, sort?: SortParams): Promise<CursorPaginatedResult<T>> {
+    let items = this.excludeDeleted(this.filterByContext(ctx, this.store)).filter((i) => this.matchesFilter(i, filter));
+    items = this.applySort(items, sort);
+    const start = params.cursor ? Number(Buffer.from(params.cursor, 'base64url').toString('utf8')) : 0;
+    const data = items.slice(start, start + params.limit);
+    const next = start + data.length;
+    return { data, nextCursor: next < items.length ? Buffer.from(String(next)).toString('base64url') : null, hasMore: next < items.length };
+  }
+
+  async deleteWhere(ctx: Context, filter: QueryFilter<T>, options?: { hard?: boolean }): Promise<number> {
     const filtered = this.filterByContext(ctx, this.store);
     const toDelete = filtered.filter((i) => this.matchesFilter(i, filter));
     let count = 0;
     for (const item of toDelete) {
-      const idx = this.store.indexOf(item);
-      if (idx !== -1) {
-        this.store.splice(idx, 1);
+      if (options?.hard) {
+        const idx = this.store.indexOf(item);
+        if (idx !== -1) {
+          this.store.splice(idx, 1);
+          count++;
+        }
+      } else {
+        (item as Record<string, unknown>).deletedAt = new Date();
         count++;
       }
     }

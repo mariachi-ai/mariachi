@@ -1,12 +1,28 @@
 {
   "name": "@mariachi/webhooks",
   "version": "0.0.5",
+  "description": "Inbound webhooks: signature verification over the raw body, dedup, direct or queued processing.",
+  "mariachi": {
+    "category": "http",
+    "status": "beta",
+    "useWhen": "Receiving calls from Stripe, GitHub, auth providers or any signed sender",
+    "entry": [
+      "WebhookServer",
+      "WebhookController",
+      "SignatureAuthController"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js",
+      "require": "./dist/schema.cjs"
     }
   },
   "main": "./dist/index.cjs",
@@ -22,7 +38,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/communication": "workspace:*",
@@ -34,6 +54,7 @@
   },
   "devDependencies": {
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

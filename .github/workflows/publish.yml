@@ -1,53 +1,38 @@
-name: Publish to npm
+name: Release
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
 
+concurrency: release
+
 jobs:
-  publish:
+  release:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
+          ref: main
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Bump version and update package.json files
-        run: node scripts/bump-packages-version.mjs
-
-      - name: Build
-        run: pnpm build
-
-      - name: Check npm auth
-        run: |
-          if [ -z "${{ secrets.NPM_TOKEN }}" ]; then
-            echo "::error::NPM_TOKEN secret is not set. Add an npm access token at: https://www.npmjs.com/settings/~/tokens (Automation type). Then in this repo: Settings → Secrets and variables → Actions → New repository secret, name NPM_TOKEN."
-            exit 1
-          fi
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> "$HOME/.npmrc"
-
-      - name: Publish packages to npm
-        run: node scripts/publish-with-delay.mjs
+          registry-url: "https://registry.npmjs.org"
+      - run: pnpm install --frozen-lockfile
+      # Opens a "Version Packages" PR while changesets are pending; publishes when that PR is merged.
+      - uses: changesets/action@v1
+        with:
+          version: pnpm version-packages
+          publish: pnpm release
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_PUBLISH_DELAY_SECONDS: "10"
-
-      - name: Commit and push version bump
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add packages/*/package.json
-          git diff --staged --quiet || (git commit -m "chore: bump package versions for npm publish" && git push)
