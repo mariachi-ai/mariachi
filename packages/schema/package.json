@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/schema",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "Every framework table (users, tenants, auth, billing, audit, ...) in the DSL, for apps to include in their schema.",
   "mariachi": {
     "category": "data",

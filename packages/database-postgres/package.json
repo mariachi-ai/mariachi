@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/database-postgres",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "Postgres via Drizzle: tenant-safe DrizzleRepository, transactions, cursor pagination, migrations from the DSL.",
   "mariachi": {
     "category": "data",

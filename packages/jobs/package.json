@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/jobs",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "Background jobs and cron on BullMQ with context propagation, retries, dedup and a dead-letter queue.",
   "mariachi": {
     "category": "async",

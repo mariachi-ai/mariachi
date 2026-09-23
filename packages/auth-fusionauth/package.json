@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/auth-fusionauth",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "FusionAuth JWT verification (JWKS) and webhook verification.",
   "mariachi": {
     "category": "security",

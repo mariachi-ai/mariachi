@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/observability",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "Logging, tracing, metrics and error tracking behind swappable adapters.",
   "mariachi": {
     "category": "foundation",

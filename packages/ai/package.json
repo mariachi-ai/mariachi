@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/ai",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "LLM sessions persisted in Postgres, with token budgets, streaming, tools, agents, RAG, provider fallback and cost tracking.",
   "mariachi": {
     "category": "domain",

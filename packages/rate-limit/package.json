@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/rate-limit",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "Rate limiting on Redis or memory: sliding window, fixed window and token bucket, with per-tenant tiers.",
   "mariachi": {
     "category": "security",

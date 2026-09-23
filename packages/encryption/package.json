@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/encryption",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "Envelope encryption with key rotation (local keys, AWS KMS, GCP KMS).",
   "mariachi": {
     "category": "data",

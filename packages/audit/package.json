@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/audit",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "Append-only audit log enforced by a database trigger, with per-tenant hash chaining, tenant-scoped queries, retention and export.",
   "mariachi": {
     "category": "domain",

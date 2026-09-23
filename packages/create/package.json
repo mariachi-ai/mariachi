@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/create",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "Project scaffolding, generators and architecture validation used by the CLI.",
   "mariachi": {
     "category": "tooling",

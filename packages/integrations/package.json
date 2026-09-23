@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/integrations",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "Third-party API integrations: validated functions with retries, per-tenant encrypted credentials, a callable registry and webhook signature checks.",
   "mariachi": {
     "category": "domain",

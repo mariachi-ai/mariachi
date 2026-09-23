@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/search",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "Full-text search on Typesense (or memory) with typed fields, alias-based reindexing and query analytics.",
   "mariachi": {
     "category": "data",

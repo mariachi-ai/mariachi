@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/lifecycle",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "Composition root: bootstrap, ordered startup and shutdown, liveness/readiness/startup health.",
   "mariachi": {
     "category": "foundation",

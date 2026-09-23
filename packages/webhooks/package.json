@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/webhooks",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "description": "Inbound webhooks: signature verification over the raw body, dedup, direct or queued processing.",
   "mariachi": {
     "category": "http",
