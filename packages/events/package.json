@@ -1,12 +1,30 @@
 {
   "name": "@mariachi/events",
-  "version": "0.0.4",
+  "version": "0.1.0",
+  "description": "Domain events with envelopes, consumer groups, Redis Streams/NATS JetStream adapters, dead letters and a transactional outbox.",
+  "mariachi": {
+    "category": "async",
+    "status": "beta",
+    "useWhen": "Reacting to something that happened in another module or process",
+    "entry": [
+      "createEventBus",
+      "DefaultEvents",
+      "defineEvent",
+      "Outbox",
+      "OutboxRelay"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./outbox": {
+      "types": "./dist/outbox.d.ts",
+      "import": "./dist/outbox.js",
+      "require": "./dist/outbox.cjs"
     }
   },
   "main": "./dist/index.cjs",
@@ -22,15 +40,41 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*",
     "ioredis": "^5",
-    "nats": "^2"
+    "nats": "^2",
+    "zod": "^3.24"
+  },
+  "peerDependencies": {
+    "@mariachi/database": "workspace:*",
+    "@mariachi/database-postgres": "workspace:*",
+    "drizzle-orm": "^0.38"
+  },
+  "peerDependenciesMeta": {
+    "@mariachi/database": {
+      "optional": true
+    },
+    "@mariachi/database-postgres": {
+      "optional": true
+    },
+    "drizzle-orm": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@mariachi/database": "workspace:*",
+    "@mariachi/database-postgres": "workspace:*",
+    "drizzle-orm": "^0.38",
+    "postgres": "^3.4",
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

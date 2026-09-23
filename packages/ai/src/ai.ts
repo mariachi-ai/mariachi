@@ -1,12 +1,12 @@
 import type { Context, Logger, Instrumentable } from '@mariachi/core';
-import { withSpan, getContainer, KEYS, AIError } from '@mariachi/core';
+import { withSpan, AIError, resolveInstrumentation, type InstrumentationDeps } from '@mariachi/core';
 import type { TracerAdapter, MetricsAdapter } from '@mariachi/core';
-import type { AISession, AIResponse, SessionConfig, ToolDefinition, PromptTemplate, AITelemetryEntry, TokenBudget } from './types';
+import type { AISession, AIResponse, SessionConfig, ToolDefinition, PromptTemplate, AITelemetryEntry, TokenBudget, CostTable } from './types';
 import type { SessionManager } from './session/manager';
 import type { ToolRegistry } from './tools/registry';
 import type { PromptRegistry } from './prompts/registry';
 import type { AITelemetryTracker } from './telemetry';
-import { estimateCost } from './cost';
+import { estimateCost, resolveRates } from './cost';
 
 export abstract class AI implements Instrumentable {
   readonly logger: Logger;
@@ -16,22 +16,25 @@ export abstract class AI implements Instrumentable {
   readonly tools: ToolRegistry;
   readonly prompts: PromptRegistry;
   readonly telemetry: AITelemetryTracker;
+  private readonly costTable?: CostTable;
+  private readonly unpricedModels = new Set<string>();
 
-  constructor(config: { sessions: SessionManager; tools: ToolRegistry; prompts: PromptRegistry; telemetry: AITelemetryTracker }) {
-    const container = getContainer();
-    this.logger = container.resolve<Logger>(KEYS.Logger);
-    this.tracer = container.has(KEYS.Tracer) ? container.resolve<TracerAdapter>(KEYS.Tracer) : undefined;
-    this.metrics = container.has(KEYS.Metrics) ? container.resolve<MetricsAdapter>(KEYS.Metrics) : undefined;
+  constructor(config: { sessions: SessionManager; tools: ToolRegistry; prompts: PromptRegistry; telemetry: AITelemetryTracker; costTable?: CostTable }, instrumentation?: InstrumentationDeps) {
+    const resolved = resolveInstrumentation(instrumentation);
+    this.logger = resolved.logger;
+    this.tracer = resolved.tracer;
+    this.metrics = resolved.metrics;
     this.sessions = config.sessions;
     this.tools = config.tools;
     this.prompts = config.prompts;
     this.telemetry = config.telemetry;
+    this.costTable = config.costTable;
   }
 
   async createSession(ctx: Context, id: string, sessionConfig: SessionConfig): Promise<AISession> {
     return withSpan(this.tracer, 'ai.createSession', { sessionId: id, model: sessionConfig.model ?? 'default' }, async () => {
       this.logger.info({ traceId: ctx.traceId, sessionId: id, model: sessionConfig.model }, 'Creating AI session');
-      const session = this.sessions.create(id, sessionConfig);
+      const session = await this.sessions.createPersisted(id, sessionConfig);
       this.metrics?.increment('ai.session.created', 1, { model: sessionConfig.model ?? 'default' });
       return session;
     });
@@ -42,11 +45,19 @@ export abstract class AI implements Instrumentable {
       const start = performance.now();
       this.logger.info({ traceId: ctx.traceId, sessionId: session.id }, 'Sending message to AI');
       
+      if (session.budget) {
+        const check = await this.checkTokenBudget(ctx, session, session.budget);
+        if (!check.allowed) throw new AIError('ai/token-budget-exceeded', check.reason ?? 'Token budget exceeded');
+      }
       try {
         const response = await session.send(message);
         const latencyMs = performance.now() - start;
         
-        const cost = estimateCost(response.model, response.usage.inputTokens, response.usage.outputTokens);
+        const cost = estimateCost(response.model, response.usage.inputTokens, response.usage.outputTokens, this.costTable);
+        if (!resolveRates(response.model, this.costTable) && !this.unpricedModels.has(response.model)) {
+          this.unpricedModels.add(response.model);
+          this.logger.warn({ model: response.model }, 'No cost table entry for model; add it to ai.costTable to track spend');
+        }
         const entry: AITelemetryEntry = {
           sessionId: session.id,
           model: response.model,
@@ -84,6 +95,7 @@ export abstract class AI implements Instrumentable {
         this.metrics?.increment('ai.request.error', 1);
         this.logger.error({ traceId: ctx.traceId, sessionId: session.id, error: (error as Error).message }, 'AI request failed');
         await this.onRequestFailed?.(ctx, session, error as Error);
+        if (error instanceof AIError) throw error;
         throw new AIError('ai/request-failed', (error as Error).message);
       }
     });
@@ -99,8 +111,8 @@ export abstract class AI implements Instrumentable {
   }
 
   async checkTokenBudget(ctx: Context, session: AISession, budget: TokenBudget): Promise<{ allowed: boolean; reason?: string; usage: { total: number; limit: number } }> {
-    const totalTokens = (session as any).totalInputTokens + (session as any).totalOutputTokens;
-    const limit = budget.maxTotalTokens ?? Infinity;
+    const totalTokens = session.usage?.().totalTokens ?? 0;
+    const limit = budget.maxTotalTokens ?? Number.POSITIVE_INFINITY;
 
     if (budget.warningThresholdPercent && totalTokens > limit * (budget.warningThresholdPercent / 100)) {
       this.logger.warn({ traceId: ctx.traceId, sessionId: session.id, totalTokens, limit }, 'Token budget warning threshold reached');

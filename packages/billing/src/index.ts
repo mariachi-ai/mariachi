@@ -1,55 +1,65 @@
+import { ConfigError } from '@mariachi/core';
+import type { BillingAdapter, BillingConfig } from './types';
+import { StripeAdapter } from './adapters/stripe';
+import { MemoryBillingAdapter } from './adapters/memory';
+
 export type {
   BillingConfig,
+  BillingAdapter,
+  BillingStore,
+  BillingEvent,
+  BillingEventType,
+  BillingEventHandler,
+  ProviderEvent,
   Customer,
   Subscription,
+  SubscriptionStatus,
   Charge,
-  CreditBalance,
-  BillingAdapter,
-  WebhookEvent,
-  WebhookProcessor,
   Refund,
+  Invoice,
+  Dispute,
+  CreditBalance,
   CreditTransaction,
+  Plan,
+  CheckoutSession,
+  PortalSession,
   UsageRecord,
   UsageSummary,
-  Invoice,
-  Plan,
   DateRange,
+  CreateCustomerInput,
+  CreateSubscriptionInput,
+  UpdateSubscriptionInput,
+  CreateChargeInput,
+  CreateCheckoutInput,
+  IdempotencyOptions,
+  WebhookEventStatus,
+  StoredWebhookEvent,
 } from './types';
+export { ENTITLED_STATUSES } from './types';
 
-export { Billing, DefaultBilling } from './billing';
-export type { BillingConfig as BillingClassConfig } from './billing';
+export { Billing, DefaultBilling, type BillingServiceConfig } from './billing';
+export { StripeAdapter, mapStripeError, type StripeAdapterConfig } from './adapters/stripe';
+export { MemoryBillingAdapter } from './adapters/memory';
+export { MemoryBillingStore } from './store/memory';
+export {
+  createBillingWebhookHandler,
+  type BillingWebhookHandler,
+  type BillingWebhookHandlerConfig,
+  type BillingWebhookResult,
+  type WebhookOutcome,
+} from './webhooks/handler';
+export { normalizeAndSync } from './webhooks/normalize';
 
-export { StripeAdapter } from './adapters/stripe';
-
-export { createWebhookHandler } from './webhooks/handler';
-export type { WebhookHandlerConfig, WebhookHandlerContext, WebhookProcessorFn } from './webhooks/handler';
-
-export { processCustomerCreated } from './webhooks/processors/customer-created';
-export { processCustomerUpdated } from './webhooks/processors/customer-updated';
-export { processSubscriptionCreated } from './webhooks/processors/subscription-created';
-export { processSubscriptionUpdated } from './webhooks/processors/subscription-updated';
-export { processSubscriptionDeleted } from './webhooks/processors/subscription-deleted';
-export { processPaymentSucceeded } from './webhooks/processors/payment-succeeded';
-export { processPaymentFailed } from './webhooks/processors/payment-failed';
-export { processInvoicePaid } from './webhooks/processors/invoice-paid';
-export { processChargeRefunded } from './webhooks/processors/charge-refunded';
-export { processDisputeCreated } from './webhooks/processors/dispute-created';
-
-export { SubscriptionService } from './features/subscriptions';
-export type { SubscriptionServiceConfig } from './features/subscriptions';
-export { CreditService } from './features/credits';
-
-export * from './schema/index';
-
-import type { BillingConfig } from './types';
-import { StripeAdapter } from './adapters/stripe';
-
-export function createBilling(config: BillingConfig) {
-  if (config.adapter === 'stripe') {
-    if (!config.secretKey) {
-      throw new Error('Stripe adapter requires secretKey');
-    }
-    return new StripeAdapter({ secretKey: config.secretKey });
+export function createBillingAdapter(config: BillingConfig): BillingAdapter {
+  switch (config.adapter) {
+    case 'stripe':
+      return new StripeAdapter(config);
+    case 'memory':
+      return new MemoryBillingAdapter();
+    default:
+      throw new ConfigError('billing/unknown-adapter', `Unknown billing adapter: ${String((config as { adapter: unknown }).adapter)}`);
   }
-  throw new Error(`Unknown billing adapter: ${config.adapter}`);
 }
+
+/** @deprecated Use `createBillingAdapter`. */
+export const createBilling = createBillingAdapter;

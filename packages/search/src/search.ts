@@ -5,7 +5,7 @@ import type {
   MetricsAdapter,
   Instrumentable,
 } from '@mariachi/core';
-import { withSpan, getContainer, KEYS, SearchError } from '@mariachi/core';
+import { withSpan, SearchError, resolveInstrumentation, type InstrumentationDeps } from '@mariachi/core';
 import type { SearchClient, SearchQuery, SearchResult, SearchDocument } from './types';
 import { SearchIndexer } from './indexer';
 import type { SearchAnalytics } from './analytics';
@@ -18,11 +18,11 @@ export abstract class Search implements Instrumentable {
   protected readonly indexer: SearchIndexer;
   protected readonly analytics?: SearchAnalytics;
 
-  constructor(config: { client: SearchClient; analytics?: SearchAnalytics }) {
-    const container = getContainer();
-    this.logger = container.resolve<Logger>(KEYS.Logger);
-    this.tracer = container.has(KEYS.Tracer) ? container.resolve<TracerAdapter>(KEYS.Tracer) : undefined;
-    this.metrics = container.has(KEYS.Metrics) ? container.resolve<MetricsAdapter>(KEYS.Metrics) : undefined;
+  constructor(config: { client: SearchClient; analytics?: SearchAnalytics }, instrumentation?: InstrumentationDeps) {
+    const resolved = resolveInstrumentation(instrumentation);
+    this.logger = resolved.logger;
+    this.tracer = resolved.tracer;
+    this.metrics = resolved.metrics;
     this.client = config.client;
     this.indexer = new SearchIndexer(config.client);
     this.analytics = config.analytics;
@@ -37,13 +37,12 @@ export abstract class Search implements Instrumentable {
       this.metrics?.histogram('search.query.latency', durationMs, { index: indexName });
       this.metrics?.increment('search.query.count', 1, { index: indexName });
       if (result.total === 0) this.metrics?.increment('search.query.zero_results', 1, { index: indexName });
-      await this.analytics?.record({
-        query: query.query,
-        index: indexName,
-        totalHits: result.total,
-        latencyMs: durationMs,
-        timestamp: new Date(),
-      });
+      // Analytics is best-effort: a failing store must not fail the search.
+      await this.analytics
+        ?.record({ query: query.query, index: indexName, totalHits: result.total, latencyMs: durationMs, timestamp: new Date() })
+        .catch((error: unknown) => {
+          this.logger.warn({ traceId: ctx.traceId, index: indexName, error: (error as Error).message }, 'Search analytics write failed');
+        });
       return result;
     });
   }
@@ -70,6 +69,10 @@ export abstract class Search implements Instrumentable {
 
   async disconnect(): Promise<void> {
     await this.client.disconnect();
+  }
+
+  isHealthy(): Promise<boolean> {
+    return this.client.isHealthy();
   }
 }
 

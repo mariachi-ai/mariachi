@@ -1,299 +1,82 @@
 # Mariachi
 
-Mariachi is a TypeScript backend framework designed to give you -- or an AI assistant -- a complete, opinionated starting point for building production backend applications.
+Mariachi is an opinionated TypeScript backend framework built so that you, or an AI agent, can put a
+production backend together from well-defined pieces instead of re-deciding the same patterns in
+every project. It's a set of `@mariachi/*` packages covering HTTP, procedures, data, events, jobs,
+realtime, auth, tenancy, billing, notifications, search, AI and more. Each vendor dependency sits
+behind a config-selected adapter.
 
-**Using Mariachi from npm?** Framework documentation (architecture, conventions, recipes, AI guide) is published with `@mariachi/core`. After `pnpm add @mariachi/core`, see `node_modules/@mariachi/core/README.md` and `node_modules/@mariachi/core/docs/` for the full docs. The rest of this README is for the monorepo itself. Instead of stitching together dozens of libraries and reinventing patterns for auth, billing, jobs, and notifications, Mariachi provides all of these as modular packages behind consistent adapter-based abstractions.
-
-The framework is structured as a **modular monolith**: all packages live in one monorepo and share a single process by default, but the architecture is designed so that any piece can be extracted into its own service later. You get the simplicity of a monolith with the option to scale into microservices when the time comes.
-
-Every external dependency -- Postgres, Redis, Stripe, Typesense, Resend, OpenAI -- is hidden behind an adapter. You configure which adapter to use, and the rest of your code never knows or cares about the underlying vendor. Swap Redis for another cache, switch from Stripe to another payment provider, or replace Resend with SendGrid -- none of your business logic changes.
-
----
-
-## How It Works
-
-Requests flow through three layers:
+A Mariachi app is a **modular monolith**: controllers call named, Zod-typed procedures through
+`@mariachi/communication` instead of importing services, so a domain can later move out of process
+without its callers changing.
 
 ```
-HTTP Request
-  --> Facade       Fastify server, auth strategies, rate limiting
-  --> Controller   Input validation (Zod), delegates to communication layer
-  --> Service      Business logic, database, cache, events, jobs
+HTTP request
+  → Facade      @mariachi/api-facade: Fastify, auth strategies, rate limits, OpenAPI, error envelope
+  → Controller  validates the route input, then communication.call(ctx, 'orders.create', input)
+  → Procedure   Zod-validated input/output, scopes, timeout
+  → Service     business logic: repositories, cache, events (outbox), jobs
 ```
 
-**The API app** (`apps/api`) handles HTTP concerns: it creates Fastify servers with auth and rate limiting, registers controllers, and delegates all business logic through the communication layer.
+Status: pre-1.0. See [ROADMAP.md](ROADMAP.md) for what's stable, what's alpha, and what's next.
 
-**The services app** (`apps/services`) is where domain logic lives. Each domain (users, orders, billing, etc.) has a service with business logic and a handler that wires it to the communication layer. Controllers never import services directly -- they call `communication.call('users.create', ctx, input)`, and the communication layer routes it to the right handler.
+## Start a project
 
-**The worker app** (`apps/worker`) runs background jobs via BullMQ. Define a job with a Zod schema and retry config, register it in the worker, and enqueue it from anywhere.
+```bash
+npx @mariachi/cli init my-app
+cd my-app && pnpm install
+docker compose up -d && cp .env.example .env
+pnpm db:generate && pnpm db:migrate
+pnpm dev                                   # http://localhost:3000/api/health/ready, /api/openapi.json
 
-This separation means your API layer is thin and your business logic is portable. If you later need to split a domain into its own service, you swap the in-process communication adapter for a network transport and nothing else changes.
+npx mariachi generate entity order         # schema, contract, repository, service, handler, controller, test
+npx mariachi validate                      # architecture and convention checks
+```
 
----
+The generated project includes an `AGENTS.md` that points agents at the framework docs shipped in
+`node_modules/@mariachi/core/docs/`.
 
-## Getting Started
+## Documentation
 
-### Prerequisites
+Everything lives in [`packages/core/docs/`](packages/core/docs/README.md) and ships inside
+`@mariachi/core`:
 
-- **Node.js** >= 20
-- **pnpm** (package manager)
-- **Docker** (for local infrastructure)
+- [Architecture](packages/core/docs/architecture.md), [conventions](packages/core/docs/conventions.md), [patterns](packages/core/docs/patterns.md)
+- [Package catalog](packages/core/docs/packages.md), generated from each package's `package.json`
+- [AI guide](packages/core/docs/ai-guide.md): which piece to use, and common mistakes
+- Guides: [HTTP](packages/core/docs/http.md), [events](packages/core/docs/events.md), [jobs](packages/core/docs/jobs.md), [realtime](packages/core/docs/realtime.md), [CLI](packages/core/docs/cli.md), [runbook](packages/core/docs/runbook.md)
+- Recipes: [domain entity](packages/core/docs/recipes/add-domain-entity.md), [background job](packages/core/docs/recipes/add-background-job.md), [webhook](packages/core/docs/recipes/add-webhook-endpoint.md), [integration](packages/core/docs/recipes/add-integration.md), [wiring and bootstrap](packages/core/docs/recipes/wiring-and-bootstrap.md)
 
-### Install and Run
+## Working on the framework
+
+Requires Node ≥ 20 (CI uses 22), pnpm 9, and Docker for integration tests.
 
 ```bash
 pnpm install
-pnpm run build
-pnpm run dev
+pnpm build && pnpm typecheck && pnpm lint   # lint includes the convention checks in scripts/
+pnpm test:unit
+pnpm test:integration                       # Testcontainers, or DATABASE_URL / REDIS_URL / NATS_URL
+pnpm docs:check                             # doc links + catalog freshness
+docker compose -f docker-compose.dev.yml up -d   # Postgres, Redis, Typesense, Mailpit for manual testing
 ```
 
-### Local Infrastructure
-
-Start Postgres, Redis, Typesense, and Mailpit with Docker:
-
-```bash
-docker compose -f docker-compose.dev.yml up -d
-```
-
-| Service | Port | Purpose |
-|---------|------|---------|
-| PostgreSQL 16 | 5432 | Primary database |
-| Redis 7 | 6379 | Cache, events, jobs, rate limiting |
-| Typesense 27 | 8108 | Full-text search |
-| Mailpit | 1025 (SMTP) / 8025 (UI) | Email testing |
-
-### Run Tests
-
-```bash
-pnpm run test          # Watch mode
-pnpm run test:run      # Single run (CI)
-```
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | -- |
-| `REDIS_URL` | Redis connection string | -- |
-| `JWT_SECRET` | JWT signing secret (min 32 chars) | -- |
-| `PORT` | Public API port | 3000 |
-| `ADMIN_PORT` | Admin API port | 3001 |
-| `WEBHOOK_PORT` | Webhook server port | 3002 |
-
-See [`docs/runbook.md`](docs/runbook.md) for the full list.
-
----
-
-## Using Mariachi in other projects
-
-You can consume Mariachi as an external library in two ways.
-
-### From npm (for published releases)
-
-Publish packages from this repo to npm, then install in any project:
-
-```bash
-pnpm add @mariachi/core @mariachi/config @mariachi/auth
-```
-
-**Automatic publish on push to main:** A GitHub Action (`.github/workflows/publish.yml`) runs on every push to `main`. It bumps the patch version (from the latest published `@mariachi/core` on npm), builds, and publishes all packages under `packages/` to the public npm registry. To enable it:
-
-1. Create an [npm access token](https://www.npmjs.com/settings/~/tokens) (automation type is fine).
-2. In your GitHub repo: **Settings → Secrets and variables → Actions**, add a secret named `NPM_TOKEN` with the token value.
-
-After that, every push to `main` will publish a new patch version and commit the version bump back to `main`.
-
-**Manual publish** (from this repo, after `pnpm build`):
-
-```bash
-pnpm --filter "./packages/*" -r publish --no-git-checks --access public
-```
-
-All `@mariachi/*` packages have `publishConfig.access: "public"` for scoped public npm publishing.
-
-### Local development with pnpm link (your own projects)
-
-To work on Mariachi and a consuming app on the same machine with instant updates:
-
-**In the Mariachi repo** (from root, link each package your app uses):
-
-```bash
-pnpm build
-pnpm --filter @mariachi/core link --global
-pnpm --filter @mariachi/config link --global
-# ... repeat for each @mariachi/* package your app depends on
-```
-
-**In your other project:**
-
-```bash
-pnpm link --global @mariachi/core
-pnpm link --global @mariachi/config
-# ... for each linked package
-```
-
-Your app will use the linked packages from this repo; rebuild Mariachi (`pnpm build` or `pnpm dev` in the package) to see changes. To switch back to npm versions, run `pnpm unlink @mariachi/core` (etc.) and reinstall.
-
----
-
-## Project Structure
+Layout:
 
 ```
-apps/
-  api/              HTTP servers + controllers (Facade + Controller layers)
-  services/         Domain services + communication handlers (Service layer)
-  worker/           BullMQ job workers and schedules
-
-packages/           28 shared framework packages (see full list below)
-integrations/       Third-party integrations (Slack, etc.)
-examples/           Reference implementations (API, services, worker, realtime)
-docs/               Architecture docs, AI guide, recipes, ADRs
-.mariachi/          Quick-reference rules for AI assistants
+packages/       framework packages (catalog: packages/core/docs/packages.md)
+integrations/   third-party integrations
+scripts/        convention lint, docs link check, catalog generator
+test/           shared Testcontainers setup
+apps/, examples/  stale pre-hardening reference code; excluded from build/typecheck/lint
 ```
 
----
+### Releasing
 
-## Packages
+Versions are managed by [Changesets](https://github.com/changesets/changesets), and all `@mariachi/*`
+packages share one version. Add a changeset with `pnpm changeset` for every user-facing change. On
+`main`, the Release workflow opens a "Version Packages" PR; merging it publishes to npm (needs the
+`NPM_TOKEN` secret).
 
-Mariachi ships 28 packages organized into six categories. Each package follows the same pattern: an abstract interface, a factory function, and one or more adapter implementations.
-
-### Foundation
-
-| Package | What it gives you |
-|---------|-------------------|
-| `@mariachi/core` | Shared types, typed errors, `Context`, DI container, `Result<T,E>`, retry utilities |
-| `@mariachi/config` | Zod-validated config from environment variables, secrets management, feature flags |
-| `@mariachi/observability` | Structured logging (Pino), distributed tracing (OpenTelemetry), metrics (Prometheus), error tracking (Sentry) |
-| `@mariachi/lifecycle` | App bootstrap, ordered startup/shutdown hooks, health checks |
-
-### Communication and API
-
-| Package | What it gives you |
-|---------|-------------------|
-| `@mariachi/communication` | Inter-module procedure calls with a middleware pipeline (auth, tracing, logging) |
-| `@mariachi/api-facade` | Fastify HTTP servers with pluggable auth strategies, rate limiting, and controller registration |
-| `@mariachi/server` | Low-level Fastify adapter with context and tracing plugins |
-| `@mariachi/webhooks` | Inbound webhook endpoints with auth verification, payload logging, and direct/queue processing modes |
-
-### Data and Storage
-
-| Package | What it gives you |
-|---------|-------------------|
-| `@mariachi/database` | Schema DSL (`defineTable`, `column`), repository interface, query filters, pagination types |
-| `@mariachi/schema` | Backend-agnostic bundle of all framework table definitions (auth, billing, ai, etc.); compile to Drizzle in your app with `compileTable` from database-postgres |
-| `@mariachi/database-postgres` | PostgreSQL + Drizzle: `createPostgresDatabase`, `compileTable`, `DrizzleRepository`; exports compiled `users` and `tenants` only (use `@mariachi/schema` + `compileTable` for other tables) |
-| `@mariachi/cache` | Redis caching with `getOrSet`, key builders, distributed locks, memoization |
-| `@mariachi/storage` | File/object storage abstraction (S3, local filesystem) |
-
-### Async and Events
-
-| Package | What it gives you |
-|---------|-------------------|
-| `@mariachi/events` | Pub/sub event bus with Redis and NATS adapters, dead letter handling |
-| `@mariachi/jobs` | Background job queue and scheduling via BullMQ, with Zod schemas and retry policies |
-| `@mariachi/realtime` | WebSocket connections, channel subscriptions, broadcasting, per-user messaging |
-
-### Security and Access
-
-| Package | What it gives you |
-|---------|-------------------|
-| `@mariachi/auth` | JWT authentication, API key management, OAuth flows, RBAC authorization, brute-force protection |
-| `@mariachi/auth-clerk` | Clerk authentication adapter, webhook verification (Svix), middleware, and webhook controller |
-| `@mariachi/auth-fusionauth` | FusionAuth JWT verification (JWKS), webhook verification (HMAC or PEM) |
-| `@mariachi/tenancy` | Multi-tenant isolation via subdomain, header, or JWT claim resolution |
-| `@mariachi/rate-limit` | Redis sliding-window rate limiting with per-user and per-key rules |
-
-### Domain Features
-
-| Package | What it gives you |
-|---------|-------------------|
-| `@mariachi/billing` | Stripe payments, subscriptions, credits, usage-based billing, webhook processing |
-| `@mariachi/notifications` | Multi-channel notifications: email (Resend), SMS, push, in-app, with template rendering and preference management |
-| `@mariachi/search` | Full-text search via Typesense with indexing, querying, and analytics |
-| `@mariachi/ai` | AI/LLM integration via AI SDK: sessions, tool registration, prompt management, agent loops, token budget tracking |
-| `@mariachi/audit` | Append-only audit logging with queryable history |
-| `@mariachi/integrations` | Pattern for third-party integrations: `defineIntegrationFn` with typed credentials, schemas, and retry |
-
-### Tooling
-
-| Package | What it gives you |
-|---------|-------------------|
-| `@mariachi/testing` | In-memory test doubles for every adapter (cache, events, jobs, storage, email, DB, AI), plus factories for test users/tenants/contexts |
-| `@mariachi/create` | Code scaffolding and validation rules for project structure, naming, and import boundaries |
-| `@mariachi/cli` | CLI binary (`mariachi init`, `mariachi generate`, `mariachi validate`) |
-
----
-
-## Using Mariachi with AI Assistants
-
-Mariachi is designed to be AI-friendly. The consistent patterns, typed contracts, and layered documentation mean an AI assistant can generate correct, idiomatic code without reading every source file.
-
-### Documentation Layers
-
-The docs are structured in three layers, from fastest to most detailed:
-
-| Layer | Location | When to use |
-|-------|----------|-------------|
-| **Quick rules** | [`.mariachi/`](.mariachi/) | Point your AI here first. Three short files covering architecture, patterns, and packages. |
-| **AI guide** | [`docs/ai-guide.md`](docs/ai-guide.md) | Decision trees ("I need to..."), package cheat sheet with code snippets, and common gotchas. |
-| **Recipes** | [`docs/recipes/`](docs/recipes/) | Step-by-step instructions for common tasks with copy-paste code from the actual codebase. |
-
-### Tips for Prompting
-
-When asking an AI to build on Mariachi, these prompting strategies will get better results:
-
-**Start with context.** Tell the AI to read `.mariachi/architecture.md` and `docs/ai-guide.md` before writing any code. This gives it the three-layer architecture, naming conventions, and import boundaries.
-
-**Be specific about the layer.** Instead of "add user management", say "add a `UsersController` in `apps/api/src/controllers/` that calls `communication.call('users.create', ctx, input)`, and add a service with handler in `apps/services/src/users/`". The more you match Mariachi's vocabulary (controller, service, handler, procedure), the better the output.
-
-**Reference the recipes.** For common tasks, point the AI to the relevant recipe:
-- "Follow `docs/recipes/add-domain-entity.md` to add an orders domain"
-- "Follow `docs/recipes/add-background-job.md` to add an order processing job"
-- "Follow `docs/recipes/add-webhook-endpoint.md` to add a Stripe webhook"
-- "Follow `docs/recipes/add-integration.md` to add a GitHub integration"
-
-**Use the package cheat sheet.** If the AI is unsure which package to use, point it to `docs/ai-guide.md#decision-tree-which-component-to-use` or `.mariachi/packages.md`.
-
-**Warn about CORE_CONCEPT.md.** The full spec (`CORE_CONCEPT.md`) describes planned features that don't exist yet (MySQL, gRPC, GraphQL adapters, etc.). If the AI reads it, it may generate code for non-existent APIs. The `docs/ai-guide.md` reflects only what's actually implemented.
-
-### Example Prompt
-
-> Read `.mariachi/architecture.md` and `docs/ai-guide.md` for project conventions. Then follow `docs/recipes/add-domain-entity.md` to add a `products` domain with fields: name (text), price (numeric), description (text), categoryId (text). Include the schema, compiled table, repository, service, handler, controller, and tests.
-
----
-
-## CLI
-
-```bash
-mariachi generate service <name>      # Scaffold a domain service with handler and tests
-mariachi generate integration <name>  # Scaffold a third-party integration
-mariachi validate                     # Check project structure and conventions
-mariachi validate ./apps              # Validate a specific path
-```
-
----
-
-## Documentation Index
-
-| Document | Purpose |
-|----------|---------|
-| [`.mariachi/architecture.md`](.mariachi/architecture.md) | Three-layer architecture, import boundaries, naming conventions |
-| [`.mariachi/patterns.md`](.mariachi/patterns.md) | Core patterns: adapters, DI, context propagation, Zod schemas |
-| [`.mariachi/conventions.md`](.mariachi/conventions.md) | TypeScript/ESM rules, dependency rules, error handling, anti-patterns |
-| [`.mariachi/packages.md`](.mariachi/packages.md) | Quick lookup table for all 28 packages |
-| [`docs/ai-guide.md`](docs/ai-guide.md) | Decision trees, package cheat sheet, common gotchas |
-| [`docs/architecture.md`](docs/architecture.md) | Architecture overview with mermaid diagrams |
-| [`docs/runbook.md`](docs/runbook.md) | Operational guide and full environment variable reference |
-| [`docs/integrations.md`](docs/integrations.md) | How integrations work |
-| [`docs/adr/`](docs/adr/) | Architecture decision records |
-| [`CORE_CONCEPT.md`](CORE_CONCEPT.md) | Full framework specification (includes planned/unimplemented features) |
-| [`IMPROVEMENTS.md`](IMPROVEMENTS.md) | Planned improvements and roadmap |
-
-### Recipes
-
-- [Add a domain entity end-to-end](docs/recipes/add-domain-entity.md) -- schema, repository, service, handler, controller, tests
-- [Add a background job](docs/recipes/add-background-job.md) -- job definition, worker registration, scheduling, enqueuing
-- [Add a webhook endpoint](docs/recipes/add-webhook-endpoint.md) -- auth controller, webhook controller, direct vs queue mode
-- [Add a third-party integration](docs/recipes/add-integration.md) -- credentials, client, integration function, registry
-- [Wiring and bootstrap](docs/recipes/wiring-and-bootstrap.md) -- full initialization order from config to running servers
-# mariachi
+To use a local checkout from another project, run `pnpm build` here, then
+`pnpm --filter @mariachi/<pkg> link --global` for each package, and
+`pnpm link --global @mariachi/<pkg>` in the consuming project.

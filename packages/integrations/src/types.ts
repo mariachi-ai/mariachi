@@ -11,8 +11,13 @@ export interface IntegrationFnDefinition<TInput = unknown, TOutput = unknown> {
 export interface IntegrationContext {
   tenantId?: string;
   traceId?: string;
-  logger?: { info: Function; error: Function };
+  logger?: { info: (...args: unknown[]) => void; error: (...args: unknown[]) => void };
+  secrets?: { get(key: string, tenantId?: string): Promise<string | undefined> };
+  decrypt?: { decrypt(ciphertext: string): Promise<string> };
+  credentialKey?: string;
 }
+
+export type IntegrationHandler = (input: unknown, ctx: IntegrationContext) => Promise<unknown>;
 
 export interface WebhookHandlerDefinition<T = unknown> {
   verify: (req: WebhookRequest) => boolean;
@@ -31,4 +36,6 @@ export interface IntegrationRegistryEntry {
   description: string;
   credentialSchema: z.ZodType;
   functions: string[];
+  /** Invoked by `registry.call`. Keys are the function names, without the integration prefix. */
+  handlers?: Record<string, IntegrationHandler>;
 }

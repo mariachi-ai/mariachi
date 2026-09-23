@@ -49,6 +49,58 @@ After verification, the rest of the stack (controllers, services, RBAC, tenancy)
 
 - **Auth webhook flow** — `createAuthWebhookDispatcher` (from `@mariachi/auth`) takes any `AuthWebhookHandler`. Clerk and FusionAuth each provide a handler via `provider.createWebhookHandler({ secret })`. The dispatcher verifies the webhook (using the handler), normalizes the event to `AuthWebhookEvent`, and calls communication procedures (e.g. `auth.user.created`). Same flow for both providers; only the verification and event parsing are provider-specific.
 
+## Authorization (RBAC)
+
+Roles are per tenant. Assignments live in `user_roles`, and each role's permissions live on its
+`roles.permissions` row as `{ action, resource }` pairs (`*` matches any action or resource).
+`DrizzleRoleStore` provides both, so pass it as the role store and the permission source:
+
+```ts
+import { createAuthorization, CachedRoleStore } from '@mariachi/auth';
+import { DrizzleRoleStore } from '@mariachi/auth/postgres';
+
+const roles = new DrizzleRoleStore(db);
+const rbac = createAuthorization({
+  store: new CachedRoleStore(roles, cache, 30),        // assignments cached 30s, dropped on grant/revoke
+  permissionSource: roles,                             // permissions loaded on first check, reloaded after permissionTtlMs
+  permissionTtlMs: 30_000,
+  permissions: [{ role: 'owner', action: '*', resource: '*' }],   // code-defined permissions merge in
+  roles: [{ name: 'admin', inherits: ['member'] }],
+  superuserScope: 'platform:admin',
+});
+
+await roles.defineRole('editor', [{ action: 'update', resource: 'posts' }, { action: 'read', resource: '*' }]);
+await rbac.grant(userId, 'editor', tenantId);
+await rbac.can(identity, 'update', 'posts');            // checks identity.tenantId's roles plus token roles
+```
+
+After `defineRole`, call `rbac.refreshPermissions()` to apply it in this process right away; other
+processes reload after `permissionTtlMs`. Granting a role that doesn't exist throws
+`auth/unknown-role`.
+
+## API keys
+
+`ApiKeyService` issues tenant API keys, stores only their hash (`api_keys` table via
+`DrizzleApiKeyStore`), and checks scopes and expiry on `verify`.
+
+```ts
+const keys = new ApiKeyService(new DrizzleApiKeyStore(db));
+const { key, id } = await keys.issue(ctx, { name: 'CI', scopes: ['reports:read'], expiresAt });   // show `key` once
+const rotated = await keys.rotate(ctx, id);   // new secret, same scopes; the old key stops working
+await keys.revoke(ctx, rotated.id);
+```
+
+Rotation writes the new key before revoking the old one, so a failure midway never leaves the
+tenant without a working key. Keys belonging to another tenant are reported as not found.
+
+## Webhook dedup
+
+Auth providers retry webhooks. Give `createAuthWebhookDispatcher` an `idempotency` store shared by
+every instance, either `RedisIdempotencyStore` from `@mariachi/cache` or `DrizzleWebhookDedup` from
+`@mariachi/auth/postgres`. Without one it logs a warning and reprocesses duplicates.
+`DrizzleWebhookDedup` claims an event with one conditional upsert, so concurrent deliveries of the
+same event can't both process it; an expired claim (a crashed worker) can be taken over.
+
 ## Summary
 
 - **Tight coupling is not required.** The coupling is the shared **contract**: `ResolvedIdentity` and `AuthProvider` (and optionally `AuthenticationAdapter` for middleware).

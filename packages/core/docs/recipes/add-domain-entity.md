@@ -1,253 +1,158 @@
-# Recipe: Add a Domain Entity End-to-End
+# Recipe: add a domain entity
 
-This walks through adding a new domain (e.g. `orders`) from schema to API endpoint. Each step references real patterns from the existing `users` domain.
+Goal: an `orders` domain with a table, repository, service, procedures, HTTP routes and tests.
 
----
+## 0. Generate the slice
 
-## 1. Define the Schema
-
-Create the table definition in `@mariachi/database`.
-
-**File:** (in your app or shared package) e.g. `src/schema/orders.ts`
-
-```ts
-import { defineTable } from '@mariachi/database';
-import { column } from '@mariachi/database';
-
-export const ordersTable = defineTable('orders', {
-  id:        column.uuid().primaryKey().defaultRandom(),
-  tenantId:  column.text().notNull(),
-  userId:    column.text().notNull(),
-  total:     column.numeric().notNull(),
-  status:    column.text().notNull(),
-  createdAt: column.timestamp().notNull().defaultNow(),
-  updatedAt: column.timestamp().notNull().defaultNow(),
-  deletedAt: column.timestamp(),
-});
+```bash
+mariachi generate entity order
 ```
 
----
+This writes the files below and registers them in `src/schema/index.ts`, `src/services/index.ts` and
+`src/api/controllers/index.ts`. The steps that follow explain each file and what to change. If you
+write them by hand, keep the same names and locations: `mariachi validate` relies on them.
 
-## 2. Compile to Drizzle
-
-Add the compiled table for use with `@mariachi/database-postgres`. For framework tables (auth, billing, ai, etc.), import the table definitions from `@mariachi/schema` and compile them in the same file.
-
-**File:** e.g. `src/compiled-schemas.ts`
+## 1. Table: `src/schema/orders.ts`
 
 ```ts
-import { ordersTable } from './schema/orders';
-import { compileTable } from '@mariachi/database-postgres';
-export const orders = compileTable(ordersTable);
+import { column, defineTable, index, type InferEntity } from '@mariachi/database';
 
-// Optional: compile framework tables from @mariachi/schema
-// import { rolesTable, billingCustomersTable } from '@mariachi/schema';
-// export const roles = compileTable(rolesTable);
-// export const billingCustomers = compileTable(billingCustomersTable);
+export const ordersTable = defineTable(
+  'orders',
+  {
+    id: column.uuid().primaryKey().defaultRandom(),
+    tenantId: column.text().notNull(),                 // tenant-scoped: repositories filter by ctx.tenantId
+    customerId: column.uuid().notNull().references(() => customersTable.columns.id, { onDelete: 'restrict' }),
+    status: column.enum(['pending', 'paid', 'cancelled']).notNull().default('pending'),
+    totalCents: column.integer().notNull(),
+    createdAt: column.timestamp().notNull().defaultNow(),
+    updatedAt: column.timestamp().notNull().defaultNow(),   // bumped on every update
+    deletedAt: column.timestamp(),                     // soft delete
+  },
+  { indexes: [index('orders_tenant_status_idx').on('tenantId', 'status')] },
+);
+
+export type Order = InferEntity<typeof ordersTable>;
 ```
 
----
+Then create the migration and apply it:
 
-## 3. Create the Repository
+```bash
+mariachi db generate --name add_orders
+mariachi db migrate
+```
 
-**File:** e.g. `src/repositories/orders.repository.ts`
+## 2. Contract: `src/contracts/orders.ts`
+
+Zod schemas for every procedure's input and output, plus the `Procedures` augmentation that types
+`communication.call`. Controllers and handlers both import from here; this is the only thing they share.
 
 ```ts
-import type { Context } from '@mariachi/core';
-import { DrizzleRepository } from '@mariachi/database-postgres';
-import { orders } from '../compiled-schemas';
+export const orderSchema = z.object({ id: z.string().uuid(), status: z.enum(['pending', 'paid', 'cancelled']), totalCents: z.number().int(), createdAt: z.date(), updatedAt: z.date() });
+export const createOrderInput = z.object({ customerId: z.string().uuid(), totalCents: z.number().int().positive() });
+export type CreateOrderInput = z.infer<typeof createOrderInput>;
+export type OrderDto = z.infer<typeof orderSchema>;
 
-export interface Order {
-  id: string;
-  tenantId: string;
-  userId: string;
-  total: string;
-  status: string;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt: Date | null;
-}
-
-export class DrizzleOrdersRepository extends DrizzleRepository<Order> {
-  constructor(db: import('drizzle-orm/postgres-js').PostgresJsDatabase<Record<string, never>>) {
-    super(orders, db, { tenantColumn: 'tenantId' });
-  }
-
-  async findByUser(ctx: Context, userId: string): Promise<Order[]> {
-    return this.findMany(ctx, { userId } as Partial<Order>);
+declare module '@mariachi/communication' {
+  interface Procedures {
+    'orders.create': { input: CreateOrderInput; output: OrderDto };
   }
 }
 ```
 
-Inherited from `DrizzleRepository`: `findById`, `findMany`, `create`, `update`, `softDelete`, `hardDelete`, `paginate`, `count`.
+Output schemas strip anything they don't list (such as `tenantId` and `deletedAt`), so internal
+columns never reach clients.
 
----
-
-## 4. Create the Service
-
-**File:** e.g. `src/orders/orders.service.ts` (in your services app)
+## 3. Repository: `src/services/orders/orders.repository.ts`
 
 ```ts
-import type { Context } from '@mariachi/core';
-import { z } from 'zod';
+export class OrdersRepository extends DrizzleRepository<Order> {
+  constructor(db: DrizzleDb) {
+    super(ordersTable, db);
+  }
 
-export const CreateOrderInput = z.object({
-  userId: z.string(),
-  total: z.string(),
-  status: z.string().default('pending'),
-  tenantId: z.string(),
-});
-
-export const GetOrderInput = z.object({
-  orderId: z.string(),
-});
-
-export const OrdersService = {
-  create: async (ctx: Context, input: z.infer<typeof CreateOrderInput>) => {
-    ctx.logger.info({ userId: input.userId }, 'Creating order');
-    const repo = new DrizzleOrdersRepository(db);
-    return repo.create(ctx, input);
-  },
-  getById: async (ctx: Context, input: z.infer<typeof GetOrderInput>) => {
-    ctx.logger.info({ orderId: input.orderId }, 'Fetching order');
-    const repo = new DrizzleOrdersRepository(db);
-    return repo.findById(ctx, input.orderId);
-  },
-};
+  findPendingForCustomer(ctx: Context, customerId: string) {
+    return this.findMany(ctx, { customerId, status: 'pending' });
+  }
+}
 ```
 
----
+The base class provides `findById`, `getById` (throws `NotFoundError`), `findOne`, `findMany`, `exists`,
+`create`, `createMany`, `update`, `updateWhere`, `softDelete`, `restore`, `hardDelete`, `paginate`,
+`paginateCursor`, `count` and `deleteWhere`. Every one of them applies the tenant filter and hides
+soft-deleted rows. Filters on unknown columns throw.
 
-## 5. Register Communication Handlers
+## 4. Service: `src/services/orders/orders.service.ts`
 
-**File:** e.g. `src/orders/orders.handler.ts`
+Business rules live here. Methods take `ctx` first and throw typed errors.
 
 ```ts
-import { OrdersService, CreateOrderInput, GetOrderInput } from './orders.service';
-import { z } from 'zod';
+export class OrdersService {
+  constructor(
+    private readonly orders: OrdersRepository,
+    private readonly jobs: Jobs,
+  ) {}
 
-const OrderOutput = z.object({
-  id: z.string(),
-  userId: z.string(),
-  total: z.string(),
-  status: z.string(),
-  tenantId: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-  deletedAt: z.date().nullable(),
-});
+  async create(ctx: Context, input: CreateOrderInput): Promise<Order> {
+    const order = await this.orders.create(ctx, { customerId: input.customerId, totalCents: input.totalCents });
+    await this.jobs.enqueue(ctx, 'send-order-confirmation', { orderId: order.id });
+    return order;
+  }
 
-export function registerOrdersHandlers(communication: ReturnType<typeof createCommunication>) {
+  async cancel(ctx: Context, id: string): Promise<Order> {
+    const order = await this.orders.getById(ctx, id);
+    if (order.status === 'paid') throw new ConflictError('orders/already-paid', 'Paid orders cannot be cancelled');
+    return this.orders.update(ctx, id, { status: 'cancelled' });
+  }
+}
+```
+
+For several writes that must succeed together, wrap them in `withTransaction(db, ctx, async () => ...)`.
+Repositories inside the callback use the transaction automatically. Use the
+[outbox](../events.md#transactional-outbox) to publish events from inside it.
+
+## 5. Handler: `src/services/orders/orders.handler.ts`
+
+```ts
+export function registerOrdersHandlers(communication: CommunicationLayer, service: OrdersService): void {
   communication.register('orders.create', {
-    schema: { input: CreateOrderInput, output: OrderOutput },
-    handler: (ctx, input) => OrdersService.create(ctx, input),
-  });
-  communication.register('orders.getById', {
-    schema: { input: GetOrderInput, output: OrderOutput.nullable() },
-    handler: (ctx, input) => OrdersService.getById(ctx, input),
+    schema: { input: createOrderInput, output: orderSchema },
+    requiredScopes: ['orders:write'],   // optional; checked against ctx.scopes
+    handler: (ctx, input) => service.create(ctx, input),
   });
 }
 ```
 
-Wire into your aggregate registration (e.g. in your services app entry):
+Wire it in `src/services/index.ts` (the generator does this):
 
 ```ts
-import { registerOrdersHandlers } from './orders/orders.handler';
-
-export function registerServiceHandlers(communication) {
-  registerUsersHandlers(communication);
-  registerOrdersHandlers(communication);
-}
+registerOrdersHandlers(communication, new OrdersService(new OrdersRepository(deps.db), deps.jobs));
 ```
 
----
-
-## 6. Add the Controller
-
-**File:** e.g. `src/controllers/orders.controller.ts` (in your API app)
+## 6. Controller: `src/api/controllers/orders.controller.ts`
 
 ```ts
-import { z } from 'zod';
-import { BaseController, type HttpContext } from '@mariachi/api-facade';
-import { createCommunication } from '@mariachi/communication';
-
-const CreateOrderInput = z.object({
-  userId: z.string(),
-  total: z.string(),
-  status: z.string().optional(),
-});
-
-const GetOrderParams = z.object({
-  orderId: z.string(),
-});
-
-const communication = createCommunication();
-
 export class OrdersController extends BaseController {
   readonly prefix = 'orders';
 
-  init() {
-    this.post(this.buildPath(), this.create);
-    this.get(this.buildPath(':id'), this.getById);
+  init(): void {
+    this.post('/', { schema: { body: createOrderInput, response: orderSchema }, status: 201, scopes: ['orders:write'] }, (ctx, body) =>
+      this.call<OrderDto>(ctx, 'orders.create', body),
+    );
   }
-
-  create = async (ctx: HttpContext, body: unknown) => {
-    const input = CreateOrderInput.parse(body);
-    return communication.call('orders.create', ctx, input);
-  };
-
-  getById = async (ctx: HttpContext, _body: unknown, params: Record<string, string>) => {
-    const input = GetOrderParams.parse({ orderId: params.id });
-    return communication.call('orders.getById', ctx, input);
-  };
 }
 ```
 
-Register on your server:
+The communication layer reaches the controller through its constructor
+(`new OrdersController(communication)` in `src/api/controllers/index.ts`), not through an import of the
+service. See [http.md](../http.md) for route options.
 
-```ts
-import { OrdersController } from './controllers/orders.controller';
+## 7. Tests
 
-const publicServer = createPublicServer()
-  .registerController(new UsersController())
-  .registerController(new OrdersController());
-```
+- **Service unit test** (`orders.service.test.ts`, generated): fake the repository and assert the
+  rules.
+- **Integration test** against real Postgres, using Testcontainers or `DATABASE_URL`: run migrations,
+  then call procedures through `communication.call(ctx, 'orders.create', input)` with a context for
+  tenant A, and assert tenant B can't read the row.
 
----
-
-## 7. Add Tests
-
-**File:** e.g. `src/orders/test/orders.service.test.ts`
-
-```ts
-import { describe, it, expect } from 'vitest';
-import { createTestContext } from '@mariachi/testing';
-import { OrdersService } from '../orders.service';
-
-describe('OrdersService', () => {
-  it('creates an order', async () => {
-    const ctx = createTestContext();
-    const result = await OrdersService.create(ctx, {
-      userId: 'user-1',
-      total: '99.99',
-      status: 'pending',
-      tenantId: 'tenant-1',
-    });
-    expect(result.id).toBeDefined();
-    expect(result.userId).toBe('user-1');
-  });
-});
-```
-
----
-
-## Checklist
-
-- [ ] Schema defined and exported
-- [ ] Compiled table added for Drizzle
-- [ ] Repository created extending `DrizzleRepository`
-- [ ] Service created in services app
-- [ ] Handler registered via `communication.register()`
-- [ ] Handler wired into `registerServiceHandlers()`
-- [ ] Controller created in API app
-- [ ] Controller registered on server
-- [ ] Tests added
+Finally, run `mariachi validate`.

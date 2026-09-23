@@ -2,7 +2,7 @@ import { defineTable, column } from '@mariachi/database';
 
 export const aiTelemetryTable = defineTable('ai_telemetry', {
   id:           column.uuid().primaryKey().defaultRandom(),
-  sessionId:    column.uuid(),
+  sessionId:    column.text(),
   tenantId:     column.text().notNull(),
   model:        column.text().notNull(),
   inputTokens:  column.integer().notNull(),

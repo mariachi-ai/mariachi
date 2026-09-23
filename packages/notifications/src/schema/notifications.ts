@@ -1,6 +1,8 @@
-import { defineTable, column } from '@mariachi/database';
+import { defineTable, column, index } from '@mariachi/database';
 
-export const notificationsTable = defineTable('notifications', {
+export const notificationsTable = defineTable(
+  'notifications',
+  {
   id:        column.uuid().primaryKey().defaultRandom(),
   tenantId:  column.text().notNull(),
   userId:    column.text().notNull(),
@@ -12,4 +14,6 @@ export const notificationsTable = defineTable('notifications', {
   metadata:  column.json(),
   createdAt: column.timestamp().notNull().defaultNow(),
   readAt:    column.timestamp(),
-});
+  },
+  { indexes: [index('notifications_inbox_idx').on('userId', 'tenantId', 'read', 'createdAt')] },
+);

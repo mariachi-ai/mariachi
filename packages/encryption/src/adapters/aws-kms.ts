@@ -1,149 +1,99 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { EncryptionAdapter } from '../adapter';
+import { ConfigError, EncryptionError } from '@mariachi/core';
+import { EncryptionAdapter, type DataKey } from '../adapter';
 
-const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 12;
-const AUTH_TAG_LENGTH = 16;
+interface KmsLikeClient {
+  send(command: unknown): Promise<any>;
+}
+
+export interface AwsKmsOptions {
+  keyId: string;
+  region?: string;
+  /** Pre-built `KMSClient` (tests, custom credentials). */
+  client?: KmsLikeClient;
+  /** KMS encryption context bound to every data key. */
+  encryptionContext?: Record<string, string>;
+}
 
 /**
- * AWS KMS adapter using envelope encryption.
- *
- * Per-encrypt:
- *   1. KMS.GenerateDataKey → plaintext DEK + encrypted DEK
- *   2. Encrypt data locally with the plaintext DEK (AES-256-GCM)
- *   3. Store encrypted DEK alongside the ciphertext
- *   4. Zero the plaintext DEK
- *
- * Per-decrypt:
- *   1. Extract encrypted DEK from blob
- *   2. KMS.Decrypt → recover plaintext DEK
- *   3. Decrypt payload locally
- *   4. Zero the plaintext DEK
- *
- * Output format: base64(encDekLen[2] + encryptedDEK + iv[12] + authTag[16] + ciphertext)
+ * AWS KMS key provider. Data keys come from `GenerateDataKey`; the wrapped key is
+ * stored in the envelope and unwrapped with `Decrypt`.
  *
  * Requires `@aws-sdk/client-kms` as a peer dependency.
  */
 export class AwsKmsAdapter extends EncryptionAdapter {
   readonly name = 'aws-kms';
-  private readonly keyId: string;
-  private readonly region: string;
-  private kmsClient: any;
+  private readonly options: AwsKmsOptions;
+  private client?: KmsLikeClient;
+  private sdk?: typeof import('@aws-sdk/client-kms');
 
-  constructor(keyId: string, region?: string) {
+  constructor(options: AwsKmsOptions) {
     super();
-    this.keyId = keyId;
-    this.region = region ?? process.env.AWS_REGION ?? 'us-east-1';
+    if (!options.keyId) throw new ConfigError('encryption/missing-kms-key', 'AWS KMS adapter requires keyId');
+    this.options = options;
+    this.client = options.client;
   }
 
-  private async getClient() {
-    if (this.kmsClient) return this.kmsClient;
-    try {
-      const { KMSClient } = await import('@aws-sdk/client-kms');
-      this.kmsClient = new KMSClient({ region: this.region });
-      return this.kmsClient;
-    } catch {
-      throw new Error(
-        'AWS KMS adapter requires @aws-sdk/client-kms. Install it: pnpm add @aws-sdk/client-kms',
-      );
+  get activeKeyId(): string {
+    return this.options.keyId;
+  }
+
+  private async load(): Promise<{ client: KmsLikeClient; sdk: typeof import('@aws-sdk/client-kms') }> {
+    if (!this.sdk) {
+      try {
+        this.sdk = await import('@aws-sdk/client-kms');
+      } catch {
+        throw new ConfigError('encryption/missing-dependency', 'AWS KMS adapter requires @aws-sdk/client-kms');
+      }
     }
+    this.client ??= new this.sdk.KMSClient({ region: this.options.region });
+    return { client: this.client, sdk: this.sdk };
   }
 
-  async encrypt(plaintext: string): Promise<string> {
-    const client = await this.getClient();
-    const { GenerateDataKeyCommand } = await import('@aws-sdk/client-kms');
-
-    const { CiphertextBlob: encryptedDek, Plaintext: plaintextDek } =
-      await client.send(
-        new GenerateDataKeyCommand({
-          KeyId: this.keyId,
+  async generateDataKey(): Promise<DataKey> {
+    const { client, sdk } = await this.load();
+    let response: { CiphertextBlob?: Uint8Array; Plaintext?: Uint8Array; KeyId?: string };
+    try {
+      response = await client.send(
+        new sdk.GenerateDataKeyCommand({
+          KeyId: this.options.keyId,
           KeySpec: 'AES_256',
+          EncryptionContext: this.options.encryptionContext,
         }),
       );
-
-    if (!plaintextDek || !encryptedDek) {
-      throw new Error('KMS GenerateDataKey returned empty key material');
+    } catch (err) {
+      throw new EncryptionError('encryption/kms-failed', 'KMS GenerateDataKey failed', { cause: (err as Error).message });
     }
-
-    try {
-      const iv = randomBytes(IV_LENGTH);
-      const cipher = createCipheriv(
-        ALGORITHM,
-        Buffer.from(plaintextDek),
-        iv,
-        { authTagLength: AUTH_TAG_LENGTH },
-      );
-
-      const encrypted = Buffer.concat([
-        cipher.update(plaintext, 'utf8'),
-        cipher.final(),
-      ]);
-      const authTag = cipher.getAuthTag();
-
-      const encDekBuf = Buffer.from(encryptedDek);
-      const encDekLen = Buffer.alloc(2);
-      encDekLen.writeUInt16BE(encDekBuf.length, 0);
-
-      const packed = Buffer.concat([encDekLen, encDekBuf, iv, authTag, encrypted]);
-      return packed.toString('base64');
-    } finally {
-      Buffer.from(plaintextDek).fill(0);
+    if (!response.Plaintext || !response.CiphertextBlob) {
+      throw new EncryptionError('encryption/kms-failed', 'KMS GenerateDataKey returned empty key material');
     }
+    const plaintext = Buffer.from(response.Plaintext);
+    response.Plaintext.fill(0);
+    return { keyId: this.options.keyId, plaintext, wrapped: Buffer.from(response.CiphertextBlob) };
   }
 
-  async decrypt(ciphertext: string): Promise<string> {
-    const client = await this.getClient();
-    const { DecryptCommand } = await import('@aws-sdk/client-kms');
-    const packed = Buffer.from(ciphertext, 'base64');
-
-    if (packed.length < 2) {
-      throw new Error('Invalid KMS ciphertext: too short');
-    }
-
-    let offset = 0;
-    const encDekLen = packed.readUInt16BE(offset);
-    offset += 2;
-
-    if (packed.length < offset + encDekLen + IV_LENGTH + AUTH_TAG_LENGTH + 1) {
-      throw new Error('Invalid KMS ciphertext: truncated');
-    }
-
-    const encryptedDek = packed.subarray(offset, offset + encDekLen);
-    offset += encDekLen;
-
-    const iv = packed.subarray(offset, offset + IV_LENGTH);
-    offset += IV_LENGTH;
-
-    const authTag = packed.subarray(offset, offset + AUTH_TAG_LENGTH);
-    offset += AUTH_TAG_LENGTH;
-
-    const encrypted = packed.subarray(offset);
-
-    const { Plaintext: plaintextDek } = await client.send(
-      new DecryptCommand({ CiphertextBlob: encryptedDek }),
-    );
-
-    if (!plaintextDek) {
-      throw new Error('KMS Decrypt returned empty plaintext');
-    }
-
+  async unwrapDataKey(keyId: string, wrapped: Buffer): Promise<Buffer> {
+    const { client, sdk } = await this.load();
+    let response: { Plaintext?: Uint8Array };
     try {
-      const decipher = createDecipheriv(
-        ALGORITHM,
-        Buffer.from(plaintextDek),
-        iv,
-        { authTagLength: AUTH_TAG_LENGTH },
+      response = await client.send(
+        new sdk.DecryptCommand({ CiphertextBlob: wrapped, KeyId: keyId, EncryptionContext: this.options.encryptionContext }),
       );
-      decipher.setAuthTag(authTag);
+    } catch (err) {
+      throw new EncryptionError('encryption/decrypt-failed', 'KMS Decrypt failed', { cause: (err as Error).message });
+    }
+    if (!response.Plaintext) throw new EncryptionError('encryption/decrypt-failed', 'KMS Decrypt returned empty plaintext');
+    const key = Buffer.from(response.Plaintext);
+    response.Plaintext.fill(0);
+    return key;
+  }
 
-      const decrypted = Buffer.concat([
-        decipher.update(encrypted),
-        decipher.final(),
-      ]);
-
-      return decrypted.toString('utf8');
-    } finally {
-      Buffer.from(plaintextDek).fill(0);
+  async isHealthy(): Promise<boolean> {
+    try {
+      const { client, sdk } = await this.load();
+      await client.send(new sdk.DescribeKeyCommand({ KeyId: this.options.keyId }));
+      return true;
+    } catch {
+      return false;
     }
   }
 }

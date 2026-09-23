@@ -1,3 +1,4 @@
+import { AIError } from '@mariachi/core';
 import type { ToolDefinition } from '../types';
 
 export class ToolRegistry {
@@ -17,9 +18,9 @@ export class ToolRegistry {
 
   async execute(name: string, input: unknown): Promise<unknown> {
     const tool = this.tools.get(name);
-    if (!tool) throw new Error(`Tool ${name} not found`);
+    if (!tool) throw new AIError('ai/tool-not-found', `Tool ${name} not found`);
     const parsed = tool.schema.safeParse(input);
-    if (!parsed.success) throw new Error(`Invalid input for tool ${name}: ${parsed.error.message}`);
+    if (!parsed.success) throw new AIError('ai/tool-invalid-input', `Invalid input for tool ${name}: ${parsed.error.message}`);
     return tool.handler(parsed.data);
   }
 }

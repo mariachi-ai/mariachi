@@ -3,7 +3,7 @@ import { AuthController, type WebhookIdentity } from '@mariachi/webhooks';
 import { extractSvixHeaders, verifyClerkWebhook } from './verify';
 
 /**
- * Webhook auth controller that verifies Clerk/Svix signatures.
+ * Webhook auth controller that verifies Clerk/Svix signatures against the exact raw request bytes.
  * For use with `@mariachi/webhooks` WebhookServer.
  */
 export class ClerkWebhookAuth extends AuthController {
@@ -11,18 +11,16 @@ export class ClerkWebhookAuth extends AuthController {
     super();
   }
 
-  async auth(req: IncomingRequest, _ctx: RequestContext): Promise<WebhookIdentity | null> {
+  async auth(req: IncomingRequest, ctx: RequestContext): Promise<WebhookIdentity | null> {
     const svixHeaders = extractSvixHeaders(req.headers);
     if (!svixHeaders) return null;
-
+    if (req.rawBody === undefined) {
+      ctx.logger.error({}, 'Clerk webhook received without rawBody; signature cannot be verified');
+      return null;
+    }
     try {
-      const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-      verifyClerkWebhook(this.signingSecret, body, svixHeaders);
-      return {
-        provider: 'clerk',
-        verified: true,
-        metadata: { svixId: svixHeaders['svix-id'] },
-      };
+      verifyClerkWebhook(this.signingSecret, req.rawBody, svixHeaders);
+      return { provider: 'clerk', verified: true, metadata: { svixId: svixHeaders['svix-id'] } };
     } catch {
       return null;
     }

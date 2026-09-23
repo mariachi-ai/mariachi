@@ -1,6 +1,16 @@
 {
   "name": "@mariachi/communication",
-  "version": "0.0.4",
+  "version": "0.1.0",
+  "description": "Typed in-process procedure calls between controllers and services, with middleware, timeouts and scope checks.",
+  "mariachi": {
+    "category": "http",
+    "status": "beta",
+    "useWhen": "Controllers calling business logic (communication.call), never importing services",
+    "entry": [
+      "createCommunication",
+      "defineProcedure"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -22,7 +32,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*",
@@ -30,6 +44,7 @@
   },
   "devDependencies": {
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

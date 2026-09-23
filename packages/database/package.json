@@ -1,12 +1,29 @@
 {
   "name": "@mariachi/database",
-  "version": "0.0.4",
+  "version": "0.1.0",
+  "description": "Driver-agnostic schema DSL (defineTable), repository contract and seeds.",
+  "mariachi": {
+    "category": "data",
+    "status": "beta",
+    "useWhen": "Declaring tables, indexes and seeds",
+    "entry": [
+      "defineTable",
+      "column",
+      "index",
+      "defineSeed"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js",
+      "require": "./dist/schema.cjs"
     }
   },
   "main": "./dist/index.cjs",
@@ -22,13 +39,18 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

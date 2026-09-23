@@ -41,7 +41,7 @@ export class ClerkWebhookController extends WebhookController {
 
   init(): void {
     this.post(
-      this.buildPath('webhooks'),
+      'webhooks',
       { mode: 'direct', procedure: this.procedure },
       async (ctx, body) => {
         const event = body as ClerkWebhookEvent;

@@ -1,92 +1,101 @@
-import { connect, type NatsConnection, StringCodec, type Subscription } from 'nats';
-import type { EventBus, EventHandler, TypedEvent } from '../types';
+import { connect, StringCodec, type NatsConnection, type Subscription } from 'nats';
+import { EventsError, type Logger } from '@mariachi/core';
+import { decodeEnvelope, encodeEnvelope } from '../envelope';
+import type { BusSubscribeOptions, BusSubscription, EnvelopeHandler, EventBus, EventEnvelope } from '../types';
 
+export interface NatsEventBusOptions {
+  servers: string[];
+  prefix?: string;
+  logger?: Logger;
+}
+
+interface Registration {
+  subject: string;
+  handler: EnvelopeHandler;
+  group?: string;
+  sub?: Subscription;
+}
+
+/**
+ * Core NATS: at-most-once. Subscribers with the same `group` form a queue group and share events.
+ * The client reconnects and restores subscriptions on its own; registrations made before
+ * `connect()` are activated on connect.
+ */
 export class NATSEventBusAdapter implements EventBus {
+  readonly name = 'nats';
+  readonly guarantee = 'at-most-once' as const;
   private connection: NatsConnection | null = null;
   private readonly sc = StringCodec();
-  private readonly handlers = new Map<string, Set<EventHandler<unknown>>>();
-  private readonly subscriptions = new Map<string, Subscription>();
-  private readonly servers: string | string[];
+  private readonly registrations = new Set<Registration>();
   private readonly prefix: string;
+  private readonly logger?: Logger;
 
-  constructor(servers: string | string[], prefix: string = 'mariachi.events') {
-    this.servers = servers;
-    this.prefix = prefix;
-  }
-
-  async connect(): Promise<void> {
-    this.connection = await connect({
-      servers: Array.isArray(this.servers) ? this.servers : [this.servers],
-    });
-  }
-
-  async disconnect(): Promise<void> {
-    for (const sub of this.subscriptions.values()) {
-      sub.unsubscribe();
-    }
-    this.subscriptions.clear();
-    this.handlers.clear();
-    await this.connection?.drain();
-    this.connection = null;
-  }
-
-  async publish<T>(eventName: string, payload: T): Promise<void> {
-    if (!this.connection) throw new Error('NATS EventBus not connected');
-    const subject = this.subject(eventName);
-    const envelope: TypedEvent<T> = {
-      type: eventName,
-      payload,
-      occurredAt: new Date().toISOString(),
-    };
-    this.connection.publish(subject, this.sc.encode(JSON.stringify(envelope)));
-  }
-
-  subscribe<T>(eventName: string, handler: EventHandler<T>): void {
-    if (!this.connection) throw new Error('NATS EventBus not connected');
-    const subject = this.subject(eventName);
-
-    let set = this.handlers.get(eventName) as Set<EventHandler<T>> | undefined;
-    if (!set) {
-      set = new Set();
-      this.handlers.set(eventName, set as Set<EventHandler<unknown>>);
-    }
-    set.add(handler as EventHandler<T>);
-
-    if (!this.subscriptions.has(subject)) {
-      const sub = this.connection.subscribe(subject);
-      this.subscriptions.set(subject, sub);
-      (async () => {
-        for await (const msg of sub) {
-          try {
-            const envelope = JSON.parse(this.sc.decode(msg.data)) as TypedEvent<unknown>;
-            const handlers = this.handlers.get(eventName);
-            if (handlers) {
-              await Promise.all(Array.from(handlers).map((h) => h(envelope.payload)));
-            }
-          } catch {
-            // skip malformed messages
-          }
-        }
-      })();
-    }
-  }
-
-  unsubscribe(eventName: string, handler: EventHandler): void {
-    const subject = this.subject(eventName);
-    const set = this.handlers.get(eventName);
-    if (!set) return;
-    set.delete(handler);
-    if (set.size === 0) {
-      this.handlers.delete(eventName);
-      const sub = this.subscriptions.get(subject);
-      if (sub) {
-        sub.unsubscribe();
-        this.subscriptions.delete(subject);
-      }
-    }
+  constructor(private readonly options: NatsEventBusOptions) {
+    this.prefix = options.prefix ?? 'mariachi.events';
+    this.logger = options.logger;
   }
 
   private subject(eventName: string): string {
     return `${this.prefix}.${eventName}`;
+  }
+
+  async connect(): Promise<void> {
+    if (this.connection) return;
+    this.connection = await connect({ servers: this.options.servers });
+    for (const r of this.registrations) this.activate(r);
+  }
+
+  async disconnect(): Promise<void> {
+    const conn = this.connection;
+    this.connection = null;
+    for (const r of this.registrations) r.sub = undefined;
+    await conn?.drain();
+  }
+
+  async isHealthy(): Promise<boolean> {
+    if (!this.connection || this.connection.isClosed()) return false;
+    try {
+      await this.connection.flush();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async publish(envelope: EventEnvelope): Promise<void> {
+    if (!this.connection) throw new EventsError('events/not-connected', 'Event bus is not connected');
+    this.connection.publish(this.subject(envelope.type), this.sc.encode(encodeEnvelope(envelope)));
+  }
+
+  subscribe(eventName: string, handler: EnvelopeHandler, options: BusSubscribeOptions = {}): BusSubscription {
+    const reg: Registration = { subject: this.subject(eventName), handler, group: options.group };
+    this.registrations.add(reg);
+    if (this.connection) this.activate(reg);
+    return {
+      ready: this.connection ? this.connection.flush() : Promise.resolve(),
+      unsubscribe: async () => {
+        this.registrations.delete(reg);
+        reg.sub?.unsubscribe();
+      },
+    };
+  }
+
+  private activate(reg: Registration): void {
+    const sub = this.connection!.subscribe(reg.subject, reg.group ? { queue: reg.group } : undefined);
+    reg.sub = sub;
+    void (async () => {
+      for await (const msg of sub) {
+        let envelope: EventEnvelope;
+        try {
+          envelope = decodeEnvelope(this.sc.decode(msg.data));
+        } catch (error) {
+          this.logger?.warn({ subject: reg.subject, error: (error as Error).message }, 'dropping malformed event');
+          continue;
+        }
+        await reg.handler(envelope, { attempt: 1 }).catch((error: unknown) => {
+          this.logger?.error({ subject: reg.subject, eventId: envelope.id, error: (error as Error).message }, 'event delivery failed');
+        });
+      }
+    })();
   }
 }

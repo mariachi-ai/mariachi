@@ -12,6 +12,7 @@ import { FusionAuthWebhookHandler } from './webhooks/handler';
 interface FusionAuthJwtPayload {
   sub: string;
   applicationId?: string;
+  tid?: string;
   roles?: string[];
   aud?: string | string[];
   iss?: string;
@@ -33,7 +34,9 @@ export class FusionAuthAuthProvider implements AuthProvider {
 
   async verify(token: string): Promise<ResolvedIdentity> {
     try {
-      const verifyOpts: { audience?: string; issuer?: string } = {};
+      const verifyOpts: { audience?: string; issuer?: string; algorithms: string[] } = {
+        algorithms: ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512'],
+      };
       if (this.config.clientId) verifyOpts.audience = this.config.clientId;
       if (this.config.issuer) verifyOpts.issuer = this.config.issuer;
       const { payload } = await jwtVerify(token, this.jwks, verifyOpts);
@@ -43,8 +46,9 @@ export class FusionAuthAuthProvider implements AuthProvider {
 
       return {
         userId: claims.sub,
-        tenantId: claims.applicationId ?? '',
+        tenantId: claims.tid ?? claims.applicationId ?? '',
         scopes: roles,
+        roles,
         identityType: 'session',
         sessionId: claims.sid,
       };

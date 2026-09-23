@@ -1,6 +1,18 @@
 {
   "name": "@mariachi/encryption",
-  "version": "0.0.4",
+  "version": "0.1.0",
+  "description": "Envelope encryption with key rotation (local keys, AWS KMS, GCP KMS).",
+  "mariachi": {
+    "category": "data",
+    "status": "beta",
+    "useWhen": "Encrypting fields or blobs at rest",
+    "entry": [
+      "createEncryption",
+      "LocalAdapter",
+      "AwsKmsAdapter",
+      "GcpKmsAdapter"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -22,7 +34,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*"
@@ -43,6 +59,7 @@
     "@aws-sdk/client-kms": "^3.700.0",
     "@google-cloud/kms": "^4.5.0",
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

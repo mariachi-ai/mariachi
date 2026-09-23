@@ -1,88 +1,105 @@
-import Redis from 'ioredis';
-import type { Context } from '@mariachi/core';
-import type { EventBus, EventHandler, TypedEvent } from '../types';
+import type Redis from 'ioredis';
+import { EventsError, type Logger } from '@mariachi/core';
+import { decodeEnvelope, encodeEnvelope } from '../envelope';
+import type { BusSubscribeOptions, BusSubscription, EnvelopeHandler, EventBus, EventEnvelope } from '../types';
+import { closeRedis, ensureConnected, openRedis, pingRedis } from './redis-connection';
 
+export interface RedisEventBusOptions {
+  url?: string;
+  client?: Redis;
+  prefix?: string;
+  logger?: Logger;
+}
+
+/**
+ * Redis pub/sub. Fire-and-forget fan-out: every subscriber on every instance receives each event,
+ * and events published while a subscriber is offline are lost. Use `redis-streams` for work that
+ * must not be dropped or must be shared across instances.
+ */
 export class RedisEventBusAdapter implements EventBus {
-  private pub: Redis | null = null;
-  private sub: Redis | null = null;
-  private readonly url: string;
+  readonly name = 'redis';
+  readonly guarantee = 'at-most-once' as const;
+  private readonly pub: Redis;
+  private readonly sub: Redis;
+  private readonly ownsPub: boolean;
   private readonly prefix: string;
-  private readonly handlers = new Map<string, Set<EventHandler<unknown>>>();
-  private subscribedChannels = new Set<string>();
+  private readonly logger?: Logger;
+  private readonly handlers = new Map<string, Set<EnvelopeHandler>>();
+  private connected = false;
 
-  constructor(url: string, prefix: string) {
-    this.url = url;
-    this.prefix = prefix;
+  constructor(options: RedisEventBusOptions = {}) {
+    const { client, owned } = openRedis(options.url, options.client);
+    this.pub = client;
+    this.ownsPub = owned;
+    this.sub = client.duplicate({ lazyConnect: true });
+    this.prefix = options.prefix ?? 'mariachi.events';
+    this.logger = options.logger;
+    this.sub.on('message', (channel: string, message: string) => this.dispatch(channel, message));
+  }
+
+  private channel(eventName: string): string {
+    return `${this.prefix}:${eventName}`;
+  }
+
+  private dispatch(channel: string, message: string): void {
+    const handlers = this.handlers.get(channel);
+    if (!handlers?.size) return;
+    let envelope: EventEnvelope;
+    try {
+      envelope = decodeEnvelope(message);
+    } catch (error) {
+      this.logger?.warn({ channel, error: (error as Error).message }, 'dropping malformed event');
+      return;
+    }
+    for (const handler of handlers) {
+      handler(envelope, { attempt: 1 }).catch((error: unknown) => {
+        this.logger?.error({ channel, eventId: envelope.id, error: (error as Error).message }, 'event delivery failed');
+      });
+    }
   }
 
   async connect(): Promise<void> {
-    this.pub = new Redis(this.url);
-    this.sub = new Redis(this.url);
-    this.sub.on('message', (channel: string, message: string) => {
-      const eventName = this.prefix ? channel.slice(this.prefix.length + 1) : channel;
-      const handlers = this.handlers.get(eventName);
-      if (!handlers?.size) return;
-      try {
-        const envelope = JSON.parse(message) as TypedEvent<unknown>;
-        const payload = envelope.payload;
-        void Promise.all(
-          Array.from(handlers).map((h) => h(payload, undefined as Context | undefined))
-        );
-      } catch {
-        // ignore parse/handler errors per message
-      }
-    });
+    await ensureConnected(this.pub);
+    await ensureConnected(this.sub);
+    this.connected = true;
+    const channels = [...this.handlers.keys()];
+    if (channels.length) await this.sub.subscribe(...channels);
   }
 
   async disconnect(): Promise<void> {
-    if (this.sub) {
-      await this.sub.quit();
-      this.sub = null;
-    }
-    if (this.pub) {
-      await this.pub.quit();
-      this.pub = null;
-    }
-    this.handlers.clear();
-    this.subscribedChannels.clear();
+    this.connected = false;
+    await closeRedis(this.sub);
+    if (this.ownsPub) await closeRedis(this.pub);
   }
 
-  async publish<T>(eventName: string, payload: T): Promise<void> {
-    if (!this.pub) throw new Error('EventBus not connected');
-    const channel = this.prefix ? `${this.prefix}:${eventName}` : eventName;
-    const envelope: TypedEvent<T> = {
-      type: eventName,
-      payload,
-      occurredAt: new Date().toISOString(),
-    };
-    await this.pub.publish(channel, JSON.stringify(envelope));
+  isHealthy(): Promise<boolean> {
+    return pingRedis(this.pub);
   }
 
-  subscribe<T>(eventName: string, handler: EventHandler<T>): void {
-    const channel = this.prefix ? `${this.prefix}:${eventName}` : eventName;
-    let set = this.handlers.get(eventName) as Set<EventHandler<T>> | undefined;
+  async publish(envelope: EventEnvelope): Promise<void> {
+    if (!this.connected) throw new EventsError('events/not-connected', 'Event bus is not connected');
+    await this.pub.publish(this.channel(envelope.type), encodeEnvelope(envelope));
+  }
+
+  subscribe(eventName: string, handler: EnvelopeHandler, _options: BusSubscribeOptions = {}): BusSubscription {
+    const channel = this.channel(eventName);
+    let set = this.handlers.get(channel);
+    const isNew = !set;
     if (!set) {
       set = new Set();
-      this.handlers.set(eventName, set as Set<EventHandler<unknown>>);
+      this.handlers.set(channel, set);
     }
-    set.add(handler as EventHandler<T>);
-    if (!this.subscribedChannels.has(channel) && this.sub) {
-      this.sub.subscribe(channel);
-      this.subscribedChannels.add(channel);
-    }
-  }
-
-  unsubscribe(eventName: string, handler: EventHandler): void {
-    const channel = this.prefix ? `${this.prefix}:${eventName}` : eventName;
-    const set = this.handlers.get(eventName);
-    if (!set) return;
-    set.delete(handler);
-    if (set.size === 0) {
-      this.handlers.delete(eventName);
-      if (this.subscribedChannels.has(channel) && this.sub) {
-        this.sub.unsubscribe(channel);
-        this.subscribedChannels.delete(channel);
-      }
-    }
+    set.add(handler);
+    const ready = isNew && this.connected ? this.sub.subscribe(channel).then(() => undefined) : Promise.resolve();
+    return {
+      ready,
+      unsubscribe: async () => {
+        set.delete(handler);
+        if (set.size === 0) {
+          this.handlers.delete(channel);
+          if (this.connected) await this.sub.unsubscribe(channel);
+        }
+      },
+    };
   }
 }

@@ -13,13 +13,15 @@ export interface WebhookRouteOpts {
   jobName?: string;
   /** Log retention duration, e.g. '7d', '30d', '90d'. */
   ttl?: string;
+  /** Store the payload in the webhook log. Default true. Disable for PII-heavy providers. */
+  logPayload?: boolean;
 }
 
 export type WebhookHandler = (
   ctx: WebhookContext,
   body: unknown,
   params: Record<string, string>,
-  query: Record<string, string>,
+  query: Record<string, string | string[]>,
 ) => Promise<unknown>;
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

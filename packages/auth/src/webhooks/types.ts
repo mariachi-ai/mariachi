@@ -16,7 +16,7 @@ export interface AuthWebhookHandler {
   verify(
     rawBody: string | Buffer,
     headers: Record<string, string | string[] | undefined>,
-  ): AuthWebhookEvent;
+  ): AuthWebhookEvent | Promise<AuthWebhookEvent>;
 }
 
 export interface AuthWebhookEvent {
@@ -26,6 +26,8 @@ export interface AuthWebhookEvent {
   type: string;
   /** Provider name that originated this event */
   provider: string;
+  /** Tenant the event belongs to, when the provider reports one */
+  tenantId?: string;
   /** Normalized event payload */
   data: Record<string, unknown>;
   /** The original unmodified event from the provider */

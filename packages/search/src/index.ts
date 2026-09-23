@@ -1,6 +1,7 @@
 import type { SearchConfig, SearchClient } from './types';
 import { SearchError } from '@mariachi/core';
 import { TypesenseSearchAdapter } from './adapters/typesense';
+import { MemorySearchAdapter } from './adapters/memory';
 
 export type {
   SearchConfig,
@@ -8,6 +9,8 @@ export type {
   SearchQuery,
   SearchResult,
   SearchIndex,
+  SearchField,
+  SearchFieldType,
   SearchClient,
 } from './types';
 
@@ -17,11 +20,13 @@ export function createSearch(config: SearchConfig): SearchClient {
     const apiKey = config.apiKey ?? '';
     return new TypesenseSearchAdapter({ url, apiKey });
   }
+  if (config.adapter === 'memory') return new MemorySearchAdapter();
   throw new SearchError('search/unknown-adapter', `Unknown search adapter: ${config.adapter}`);
 }
 
 export { SearchIndexer } from './indexer';
 export { TypesenseSearchAdapter } from './adapters/typesense';
+export { MemorySearchAdapter } from './adapters/memory';
 export { Search, DefaultSearch } from './search';
-export { SearchAnalytics } from './analytics';
-export type { SearchAnalyticsEntry } from './analytics';
+export { SearchAnalytics, MemorySearchAnalytics, RedisListAnalytics } from './analytics';
+export type { SearchAnalyticsEntry, SearchAnalyticsStore, RedisList } from './analytics';

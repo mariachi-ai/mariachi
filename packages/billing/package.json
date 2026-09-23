@@ -1,19 +1,42 @@
 {
   "name": "@mariachi/billing",
-  "version": "0.0.4",
+  "version": "0.1.0",
+  "description": "Stripe billing with a local Postgres mirror: customers, subscriptions, plans, charges, refunds, a credit ledger, usage and replayable webhooks.",
+  "mariachi": {
+    "category": "domain",
+    "status": "beta",
+    "useWhen": "Taking payments, metering usage or checking entitlements",
+    "entry": [
+      "DefaultBilling",
+      "createBillingAdapter",
+      "createBillingWebhookHandler",
+      "DrizzleBillingStore"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js",
+      "require": "./dist/schema.cjs"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "import": "./dist/postgres.js",
+      "require": "./dist/postgres.cjs"
     }
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -22,15 +45,34 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*",
     "@mariachi/database": "workspace:*",
     "stripe": "^17"
   },
+  "peerDependencies": {
+    "@mariachi/database-postgres": "workspace:*",
+    "drizzle-orm": "^0.38"
+  },
+  "peerDependenciesMeta": {
+    "@mariachi/database-postgres": {
+      "optional": true
+    },
+    "drizzle-orm": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@mariachi/database-postgres": "workspace:*",
+    "drizzle-orm": "^0.38",
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

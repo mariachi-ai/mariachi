@@ -1,5 +1,5 @@
 import type { Logger, TracerAdapter, MetricsAdapter } from '@mariachi/core';
-import { getContainer, KEYS } from '@mariachi/core';
+import { resolveInstrumentation, type InstrumentationDeps } from '@mariachi/core';
 import type { Instrumentable, Disposable } from '@mariachi/core';
 import type { DatabaseAdapter } from './types';
 
@@ -9,11 +9,11 @@ export abstract class Database implements Instrumentable, Disposable {
   readonly metrics?: MetricsAdapter;
   protected readonly dbClient: DatabaseAdapter;
 
-  constructor(config: { client: DatabaseAdapter }) {
-    const container = getContainer();
-    this.logger = container.resolve<Logger>(KEYS.Logger);
-    this.tracer = container.has(KEYS.Tracer) ? container.resolve<TracerAdapter>(KEYS.Tracer) : undefined;
-    this.metrics = container.has(KEYS.Metrics) ? container.resolve<MetricsAdapter>(KEYS.Metrics) : undefined;
+  constructor(config: { client: DatabaseAdapter }, instrumentation?: InstrumentationDeps) {
+    const resolved = resolveInstrumentation(instrumentation);
+    this.logger = resolved.logger;
+    this.tracer = resolved.tracer;
+    this.metrics = resolved.metrics;
     this.dbClient = config.client;
   }
 
@@ -27,8 +27,10 @@ export abstract class Database implements Instrumentable, Disposable {
     await this.dbClient.disconnect();
   }
 
+  /** Runs `SELECT 1`; a pool that exists but can't reach the server is unhealthy. */
   async isHealthy(): Promise<boolean> {
-    return this.dbClient.isConnected();
+    if (!this.dbClient.isConnected()) return false;
+    return this.dbClient.ping();
   }
 }
 

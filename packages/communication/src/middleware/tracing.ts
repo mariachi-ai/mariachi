@@ -1,10 +1,13 @@
-import type { Middleware } from '@mariachi/core';
+import type { Middleware, TracerAdapter } from '@mariachi/core';
+import { withSpan } from '@mariachi/core';
 import type { ProcedureContext } from '../types';
 
-export function tracingMiddleware(): Middleware {
+/**
+ * Opens a span around the handler (inside other middleware). `Communication.call()` already
+ * spans the whole call; use this when you use a bare `InProcessAdapter`.
+ */
+export function tracingMiddleware(tracer: TracerAdapter): Middleware {
   return async (ctx: ProcedureContext, next: () => Promise<void>): Promise<void> => {
-    ctx.logger.info({ procedure: ctx.procedure, traceId: ctx.traceId });
-    await next();
-    ctx.logger.info({ procedure: ctx.procedure, traceId: ctx.traceId });
+    await withSpan(tracer, `procedure ${ctx.procedure}`, { 'mariachi.procedure': ctx.procedure ?? 'unknown', 'mariachi.trace_id': ctx.traceId }, () => next());
   };
 }

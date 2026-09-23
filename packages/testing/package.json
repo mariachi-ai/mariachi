@@ -1,6 +1,17 @@
 {
   "name": "@mariachi/testing",
-  "version": "0.0.4",
+  "version": "0.1.0",
+  "description": "Test doubles kept honest by contract suites shared with the real adapters, plus factories and a harness.",
+  "mariachi": {
+    "category": "tooling",
+    "status": "beta",
+    "useWhen": "Testing services without real infrastructure",
+    "entry": [
+      "createTestHarness",
+      "createTestContext",
+      "TestRepository"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -13,7 +24,8 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -22,14 +34,30 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@mariachi/ai": "workspace:*",
+    "@mariachi/cache": "workspace:*",
     "@mariachi/core": "workspace:*",
+    "@mariachi/database": "workspace:*",
+    "@mariachi/events": "workspace:*",
+    "@mariachi/jobs": "workspace:*",
+    "@mariachi/notifications": "workspace:*",
+    "@mariachi/search": "workspace:*",
+    "@mariachi/storage": "workspace:*",
     "zod": "^3"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3",
+    "@mariachi/database-postgres": "workspace:^",
+    "drizzle-orm": "^0.38",
+    "tsup": "^8",
     "typescript": "^5.7",
-    "tsup": "^8"
+    "vitest": "^3"
   }
 }

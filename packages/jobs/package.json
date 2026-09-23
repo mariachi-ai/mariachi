@@ -1,6 +1,17 @@
 {
   "name": "@mariachi/jobs",
-  "version": "0.0.4",
+  "version": "0.1.0",
+  "description": "Background jobs and cron on BullMQ with context propagation, retries, dedup and a dead-letter queue.",
+  "mariachi": {
+    "category": "async",
+    "status": "beta",
+    "useWhen": "Work that runs later, on a schedule, or must survive restarts",
+    "entry": [
+      "createJobQueue",
+      "defineJob",
+      "DefaultJobs"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -22,7 +33,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*",
@@ -31,6 +46,7 @@
   },
   "devDependencies": {
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

@@ -3,8 +3,11 @@ import type { AITelemetryEntry } from './types';
 export class AITelemetryTracker {
   private entries: AITelemetryEntry[] = [];
 
+  constructor(private readonly persist?: (entry: AITelemetryEntry) => void | Promise<void>) {}
+
   record(entry: AITelemetryEntry): void {
     this.entries.push(entry);
+    void this.persist?.(entry);
   }
 
   getEntries(sessionId?: string): AITelemetryEntry[] {

@@ -1,6 +1,18 @@
 {
   "name": "@mariachi/database-postgres",
-  "version": "0.0.4",
+  "version": "0.1.0",
+  "description": "Postgres via Drizzle: tenant-safe DrizzleRepository, transactions, cursor pagination, migrations from the DSL.",
+  "mariachi": {
+    "category": "data",
+    "status": "beta",
+    "useWhen": "Reading and writing Postgres",
+    "entry": [
+      "createPostgresDatabase",
+      "DrizzleRepository",
+      "withTransaction",
+      "compileSchema"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -22,7 +34,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/core": "workspace:*",
@@ -30,9 +46,18 @@
     "drizzle-orm": "^0.38",
     "postgres": "^3.4"
   },
+  "peerDependencies": {
+    "drizzle-kit": ">=0.30"
+  },
+  "peerDependenciesMeta": {
+    "drizzle-kit": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "typescript": "^5.7",
     "tsup": "^8",
-    "drizzle-kit": "^0.30"
+    "drizzle-kit": "^0.30",
+    "vitest": "^3"
   }
 }

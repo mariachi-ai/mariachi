@@ -1,6 +1,16 @@
 {
   "name": "@mariachi/auth-fusionauth",
   "version": "0.1.0",
+  "description": "FusionAuth JWT verification (JWKS) and webhook verification.",
+  "mariachi": {
+    "category": "security",
+    "status": "alpha",
+    "useWhen": "Using FusionAuth as the identity provider",
+    "entry": [
+      "createFusionAuthAuth",
+      "FusionAuthWebhookHandler"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -12,7 +22,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -20,7 +32,11 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mariachi/auth": "workspace:*",
@@ -29,6 +45,7 @@
   },
   "devDependencies": {
     "typescript": "^5.7",
-    "tsup": "^8"
+    "tsup": "^8",
+    "vitest": "^3"
   }
 }

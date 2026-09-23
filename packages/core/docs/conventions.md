@@ -1,109 +1,81 @@
-# Mariachi Conventions
+# Conventions
 
-## TypeScript and ESM
+Rules marked **(validate)** are checked by `mariachi validate` in apps. Rules marked **(lint)** are
+checked in this repo by `pnpm lint:conventions`. Suppress a single finding with a
+`// mariachi-validate-ignore <rule>` comment on the same or the preceding line, and say why.
 
-- **All packages use ESM** (`"type": "module"` in every `package.json`)
-- **Build tool:** tsup (ESM + CJS dual output, declaration files, sourcemaps)
-- **TypeScript:** strict mode, ES2022 target, `"moduleResolution": "bundler"`
-- **Relative imports are extensionless:** `import { foo } from './bar'` (not `'./bar.js'`). The `"moduleResolution": "bundler"` tsconfig setting and tsup handle resolution.
-- **Cross-package imports use bare specifiers:** `import { Context } from '@mariachi/core'` (no extension)
-- **All packages export from `src/index.ts`** as the single public entry point
+## TypeScript and modules
 
-### tsup Config (every package)
+- ESM everywhere (`"type": "module"`), TypeScript strict, ES2022, `moduleResolution: "bundler"`.
+- Relative imports are extensionless: `import { x } from './x'`. **(validate: `extensionless-imports`, lint)**
+- Import `@mariachi/*` by package root or a documented subpath (`@mariachi/events/outbox`,
+  `@mariachi/database/schema`), never `.../src/...` or `.../dist/...`. **(validate: `no-deep-imports`)**
+- Framework packages build with tsup (ESM + CJS + d.ts). Optional vendor SDKs are optional
+  `peerDependencies` loaded lazily with `loadOptionalPeer`, so importing a package never pulls in an SDK
+  you don't use.
 
-```ts
-export default defineConfig({
-  entry: ['src/index.ts'],
-  format: ['esm', 'cjs'],
-  dts: true,
-  clean: true,
-  sourcemap: true,
-  splitting: false,
-});
-```
+## Layers
 
-### tsconfig (every package)
+- Controllers never import services, repositories, or database packages. They call procedures with
+  `this.call(ctx, 'domain.action', input)`. **(validate: `no-service-import-in-controller`, `no-db-in-controller`, lint)**
+- Services never import HTTP frameworks or `@mariachi/server`, `api-facade`, `webhooks`. **(validate: `no-http-in-service`)**
+- Each `*.service.ts` has a `*.handler.ts` registering its procedures, and a test. **(validate: warnings)**
+- Procedure names are `domain.action` and unique. Registering a name twice throws
+  `communication/duplicate-procedure` at startup. **(validate: `unique-procedure-names`)**
 
-Extend a shared base or use standard options. No additional compiler options needed unless the package has special requirements.
+## Context
 
-## File Organization
+Every operation takes `ctx: Context` as its first argument: services, repositories, procedures,
+`communication.call(ctx, name, input)`, `jobs.enqueue(ctx, ...)`, `events.publish(ctx, ...)`. Never build a
+fresh context mid-request; that drops the tenant, the user and the trace. Jobs and events serialize the
+context into their envelope and rebuild it on the consumer side.
 
-- One file per concern: `types.ts`, `schema.ts`, `adapter.ts`, `middleware.ts`
-- Adapters go in `src/adapters/` subdirectory
-- Middleware goes in `src/middleware/` subdirectory
-- Schema definitions go in `src/schema/` subdirectory
-- Tests go alongside source in `test/` or `__tests__/` subdirectory
+## Errors
 
-## Dependency Rules
+- Throw `MariachiError` subclasses from `@mariachi/core`: `ValidationError`, `NotFoundError`,
+  `ConflictError`, `AuthError`, or the package error (`DatabaseError`, `JobsError`, ...), each with a stable
+  `code` like `billing/card-declined`. **(validate: `no-raw-error`, lint)**
+- The code decides the HTTP status (`errorToHttpStatus`): `*/not-found` → 404, `*/conflict` → 409,
+  `validation/*` → 400, `auth/*` → 401/403, `rate-limit/*` → 429, anything unknown → 500.
+- Every HTTP server returns the same envelope, `{ error: { code, message, traceId, details? } }`. For
+  5xx errors the message is replaced with a generic one so internals never leak.
+- Zod errors are converted with `fromZodError` into `ValidationError` with `details` listing the issues.
 
-- `@mariachi/core` has zero internal dependencies (only `zod`)
-- Other packages may depend on `@mariachi/core` freely
-- Packages should depend on abstractions, not implementations (e.g., depend on `@mariachi/database`, not `@mariachi/database-postgres`)
-- Apps may depend on any package
-- Circular dependencies between packages are not allowed
+## Configuration
 
-## Error Handling
+- Read settings with `loadConfig()` / `useConfig()` and secrets with `createSecrets()`. `process.env` is
+  only read inside `@mariachi/config` (`readEnv`). **(validate: `no-process-env`, lint)** `validate` allows it
+  in `src/config.ts`, `src/config/`, root `*.config.ts` files and `scripts/`.
+- Config is validated with Zod at startup; a bad value fails the boot with `ConfigError`.
 
-- Always throw typed errors extending `MariachiError` from `@mariachi/core`
-- Each package has its own error class: `DatabaseError`, `AuthError`, `CacheError`, etc.
-- Never throw raw `Error` or string exceptions across package boundaries
-- Errors map to HTTP status codes via `errorToHttpStatus()` in the API facade layer
+## Data
 
-## Anti-Patterns (Do Not Do These)
+- Declare tables with `defineTable` in `src/schema/`. Generate migrations with `mariachi db generate`
+  and never hand-write them. Check with `mariachi db check` in CI.
+- Soft delete by default: tables with `deletedAt` hide deleted rows from reads; `hardDelete` is explicit.
+- Tables with `tenantId` are tenant-scoped; see [architecture.md](./architecture.md#multi-tenancy).
+- Access data through `DrizzleRepository` subclasses. Don't pass the Drizzle client around.
+- Use `withTransaction(db, ctx, fn)`; repositories inside `fn` join the transaction automatically.
 
-**Do not import services from controllers.**
-Controllers must only call `communication.call()`. Never import a service or its handler directly.
+## Validation at boundaries
 
-```ts
-// WRONG
-import { UsersService } from '../../services/users/users.service';
-const result = await UsersService.create(ctx, input);
+Zod validates every input that crosses a boundary: HTTP body, params and query (route `schema`),
+procedure input and output (`register(name, { schema })`), job payloads (`defineJob({ schema })`), event
+payloads (`defineEvent(name, { schema })`) and config. Inside the service layer, trust the types.
 
-// CORRECT
-const result = await communication.call('users.create', ctx, input);
-```
+## Naming
 
-**Do not use `process.env` outside `@mariachi/config`.**
-All configuration flows through `loadConfig()` and `useConfig()`. Direct env access scatters configuration and bypasses validation.
+| Thing | Convention | Example |
+| --- | --- | --- |
+| Files | kebab-case with a role suffix | `invoice-items.service.ts` |
+| Procedures | `domainCamel.action` | `invoiceItems.create` |
+| Events | lowercase, dot-separated **(validate: `event-name-format`)** | `billing.invoice.paid` |
+| Jobs | kebab-case | `send-digest` |
+| Tables | snake_case plural; DSL keys camelCase (columns become snake_case) | `invoice_items.created_at` |
+| Error codes | `package-or-domain/kebab-reason` | `database/tenant-required` |
 
-```ts
-// WRONG
-const dbUrl = process.env.DATABASE_URL;
+## Adapters
 
-// CORRECT
-const config = useConfig();
-const dbUrl = config.database.url;
-```
-
-Exception: `PORT`, `ADMIN_PORT`, `WEBHOOK_PORT` in app entry points are acceptable since they're startup-only values.
-
-**Do not skip context propagation.**
-Every operation takes a `Context` as its first argument. Never create a new context mid-flow or drop context between layers.
-
-```ts
-// WRONG
-const user = await UsersService.create({ email, name });
-
-// CORRECT
-const user = await UsersService.create(ctx, { email, name });
-```
-
-**Do not expose the Drizzle client directly.**
-All database access goes through repository classes that extend `DrizzleRepository`. The ORM is an implementation detail.
-
-**Do not hardcode adapter choices.**
-Use factory functions (`createCache`, `createSearch`, `createJobQueue`) with config. Never instantiate adapters directly in application code.
-
-```ts
-// WRONG
-const cache = new RedisCacheAdapter({ url: 'redis://localhost' });
-
-// CORRECT
-const cache = createCache({ adapter: 'redis', url: config.redis.url });
-```
-
-**Do not write migration files by hand.**
-Schema changes go through the `defineTable` DSL in `@mariachi/database`. Migrations are generated by `drizzle-kit`.
-
-**Do not register the same procedure name twice.**
-Communication procedure names (`users.create`, `billing.charge`, etc.) must be globally unique. Duplicate registrations will silently overwrite each other.
+Construct infrastructure with factories and config (`createCache`, `createEventBus`, `createJobQueue`,
+`createPostgresDatabase`), not `new RedisCacheAdapter(...)`, so tests and local development can swap in
+memory adapters.

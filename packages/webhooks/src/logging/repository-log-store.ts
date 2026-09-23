@@ -5,7 +5,7 @@ import type { WebhookLogEntry, WebhookLogStore } from './types';
 function parseTtl(ttl: string): number {
   const match = ttl.match(/^(\d+)([dhms])$/);
   if (!match) return 7 * 24 * 60 * 60 * 1000;
-  const value = parseInt(match[1], 10);
+  const value = Number.parseInt(match[1], 10);
   const unit = match[2];
   const multipliers: Record<string, number> = {
     d: 24 * 60 * 60 * 1000,

@@ -1,3 +1,5 @@
+import { MariachiError } from './errors';
+
 export type Result<T, E = Error> =
   | { ok: true; value: T }
   | { ok: false; error: E };
@@ -39,6 +41,6 @@ export async function tryCatch<T>(fn: () => Promise<T>): Promise<Result<T, Error
   try {
     return ok(await fn());
   } catch (error) {
-    return err(error instanceof Error ? error : new Error(String(error)));
+    return err(error instanceof Error ? error : new MariachiError('unknown', String(error)));
   }
 }

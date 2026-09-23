@@ -1,6 +1,9 @@
+import { ConfigError } from '@mariachi/core';
+import { joinPath } from '@mariachi/server';
 import type { AuthController } from './auth/auth-controller';
 import type { WebhookRouteOpts, WebhookHandler, WebhookRouteDefinition, HttpMethod } from './types';
 
+/** Groups webhook routes under `prefix`; paths passed to `post`/... are relative to it. */
 export abstract class WebhookController {
   abstract readonly prefix: string;
   abstract readonly auth: AuthController;
@@ -30,12 +33,6 @@ export abstract class WebhookController {
     this.addRoute('DELETE', path, opts, handler);
   }
 
-  protected buildPath(subpath?: string): string {
-    const base = `/${this.prefix}`;
-    if (!subpath) return base;
-    return `${base}/${subpath}`;
-  }
-
   routes(): WebhookRouteDefinition[] {
     if (!this._initialized) {
       this.init();
@@ -44,18 +41,13 @@ export abstract class WebhookController {
     return this._routes;
   }
 
-  private addRoute(
-    method: HttpMethod,
-    path: string,
-    opts: WebhookRouteOpts,
-    handler: WebhookHandler,
-  ): void {
-    this._routes.push({
-      method,
-      path,
-      opts,
-      handler,
-      controllerPrefix: this.prefix,
-    });
+  private addRoute(method: HttpMethod, path: string, opts: WebhookRouteOpts, handler: WebhookHandler): void {
+    if (opts.mode === 'direct' && !opts.procedure) {
+      throw new ConfigError('webhooks/invalid-route', `Webhook ${method} ${path} is 'direct' but has no procedure`);
+    }
+    if (opts.mode === 'queue' && !opts.jobName) {
+      throw new ConfigError('webhooks/invalid-route', `Webhook ${method} ${path} is 'queue' but has no jobName`);
+    }
+    this._routes.push({ method, path: joinPath(this.prefix, path), opts, handler, controllerPrefix: this.prefix });
   }
 }

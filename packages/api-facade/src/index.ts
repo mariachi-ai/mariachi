@@ -1,20 +1,32 @@
-export { FastifyAdapter } from './server';
-export type { ServerConfig } from '@mariachi/server';
+export { FastifyAdapter, createApiServer } from './server';
+export { BaseController } from './controller';
+export { generateOpenApi } from './openapi';
+export {
+  bearerStrategy,
+  apiKeyStrategy,
+  serviceTokenStrategy,
+  hmacSignatureStrategy,
+  type TokenVerifier,
+  type ServiceTokenOptions,
+  type HmacSignatureOptions,
+} from './auth/strategies';
+export { HttpResponse, httpResponse } from '@mariachi/server';
+export type { ServerConfig, CorsOptions } from '@mariachi/server';
 export type {
+  ApiServerConfig,
   AuthStrategy,
-  RateLimitConfig,
-  RouteDefinition,
+  AuthStrategyHandler,
   ResolvedIdentity,
   RequestIdentity,
   HttpContext,
   HttpMiddleware,
+  RouteSchemas,
+  RouteHandler,
+  RouteOpts,
+  RouteDefinition,
+  RateLimitSettings,
+  RateLimitConfig,
+  OpenApiSettings,
+  HealthSource,
   AuthResolver,
 } from './types';
-export { BaseController } from './controller';
-export type { RouteOpts, RouteHandler } from './controller';
-export { resolveAuth } from './auth/resolver';
-export { SessionStrategy } from './auth/strategies/session';
-export { ApiKeyStrategy } from './auth/strategies/api-key';
-export { WebhookStrategy } from './auth/strategies/webhook';
-export { ServiceStrategy } from './auth/strategies/service';
-export { createRouter } from './router';

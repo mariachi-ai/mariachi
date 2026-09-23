@@ -1,222 +1,109 @@
-# Mariachi AI Guide
+# Guide for coding agents
 
-Concise reference for AI assistants generating code on the Mariachi framework. For quick lookups, see [architecture.md](./architecture.md), [patterns.md](./patterns.md), [conventions.md](./conventions.md), and [packages.md](./packages.md). For step-by-step instructions, see the [recipes](./recipes/).
+Read [architecture.md](./architecture.md) and [conventions.md](./conventions.md) first. This page
+answers "which piece do I use?" and lists the mistakes agents most often make. Run `mariachi validate`
+and `tsc --noEmit` before you finish.
 
----
+## Which piece?
 
-## Architecture
+| I need to... | Use | Start with |
+| --- | --- | --- |
+| Add a resource with CRUD endpoints | table + repository + service + handler + controller | `mariachi generate entity <name>`, [recipe](./recipes/add-domain-entity.md) |
+| Add business logic callable from HTTP | service + handler (`communication.register`) | `mariachi generate service <name>` |
+| Expose a procedure over HTTP | `BaseController` calling `this.call(ctx, name, input)` | `mariachi generate controller <name>`, [http.md](./http.md) |
+| Do work later, with retries, or on a cron | `defineJob` + `jobs.enqueue(ctx, ...)` / `jobs.schedule` | `mariachi generate job <name>`, [jobs.md](./jobs.md) |
+| Tell other modules something happened | `defineEvent` + `events.publish(ctx, ...)` / `subscribe` | [events.md](./events.md) |
+| Publish an event atomically with a DB write | transactional outbox | [events.md](./events.md#transactional-outbox) |
+| Receive a signed callback from a provider | `WebhookController` + `SignatureAuthController` | [recipe](./recipes/add-webhook-endpoint.md) |
+| Call a third-party API | typed client with retry + `IntegrationError` | `mariachi generate integration <name>` |
+| Push live updates to browsers | `DefaultRealtime` + `WSAdapter` | [realtime.md](./realtime.md) |
+| Cache or lock | `DefaultCache.getOrSet`, `createLock().withLock` | below |
+| Change the database | edit `src/schema/*`, then `mariachi db generate` | [cli.md](./cli.md#db) |
+| Read a setting or secret | `useConfig()` / `createSecrets()` | never `process.env` |
+| Take payments or check a plan | `DefaultBilling` + Stripe webhooks | [billing.md](./billing.md) |
+| Email, SMS, push or in-app messages | `notifications.notify(ctx, intent)` | [notifications.md](./notifications.md) |
+| Call an LLM | `DefaultAI` sessions | [ai.md](./ai.md) |
+| Record who did what | `audit.log(ctx, ...)` on `DrizzleAuditLog` | [audit.md](./audit.md) |
+| Check a permission | `rbac.can(identity, action, resource)` | [auth-and-providers.md](./auth-and-providers.md#authorization-rbac) |
+| Turn a feature on per tenant | `createFeatureFlags` + `DrizzleFeatureFlagStore` | [feature-flags.md](./feature-flags.md) |
+| Store or serve files | `DefaultStorage` | [storage.md](./storage.md) |
+| Full-text search | `DefaultSearch` on Typesense | [search.md](./search.md) |
+| Limit a tenant's usage outside HTTP | `DefaultRateLimiting.consumeTier` | [http.md](./http.md#rate-limits) |
+| Test without infrastructure | `@mariachi/testing` doubles | [testing.md](./testing.md) |
 
-Three-layer request flow:
-
-```
-HTTP → Facade (FastifyAdapter, auth, rate limit)
-     → Controller (Zod validation, communication.call())
-     → Service (business logic, DB, cache, events)
-```
-
-Apps map to layers:
-
-| App | Layer | Purpose |
-|-----|-------|---------|
-| API app | Facade + Controller | HTTP servers, controllers, auth |
-| Services app | Service | Domain logic, handler registration |
-| Worker app | Background | BullMQ job workers, schedules |
-
----
-
-## Decision Tree: Which Component to Use
-
-**"I need to handle an HTTP request"**
-→ Add a controller extending `BaseController`. Register on a server.
-
-**"I need to run business logic"**
-→ Create a service in your services app. Register a handler via `communication.register()`. Call it from a controller via `communication.call('<domain>.<action>', ctx, input)`.
-
-**"I need to run something in the background"**
-→ Define a job with a Zod schema and retry config. Enqueue via `jobQueue.enqueue(jobName, data)` from a service.
-→ See [recipes/add-background-job.md](./recipes/add-background-job.md).
-
-**"I need to react to something that happened"**
-→ Use the event bus: `eventBus.publish('user.created', payload)` and `eventBus.subscribe('user.created', handler)`. Adapter: Redis pub/sub or NATS.
-
-**"I need to run something on a schedule"**
-→ Add a schedule entry: `{ name, cron, jobName, data }`.
-
-**"I need to cache data"**
-→ Use `cache.getOrSet(key, ttl, fetchFn)` from `@mariachi/cache`. Redis-backed.
-
-**"I need to store files"**
-→ Use `@mariachi/storage` with S3 adapter.
-
-**"I need real-time updates"**
-→ Use `@mariachi/realtime` with `WSAdapter`. Supports channels, broadcast, and per-user messaging.
-
-**"I need to accept webhooks from a third party"**
-→ Create a `WebhookController`. Choose `mode: 'direct'` (sync via communication) or `mode: 'queue'` (async via jobs).
-→ See [recipes/add-webhook-endpoint.md](./recipes/add-webhook-endpoint.md).
-
-**"I need to integrate with an external service"**
-→ Use `defineIntegrationFn()` from `@mariachi/integrations`. See [recipes/add-integration.md](./recipes/add-integration.md).
-
-**"I need to wire up and bootstrap an app from scratch"**
-→ See [recipes/wiring-and-bootstrap.md](./recipes/wiring-and-bootstrap.md). Shows the full initialization sequence from config to running servers.
-
-**"I need to add a new domain entity end-to-end"**
-→ See [recipes/add-domain-entity.md](./recipes/add-domain-entity.md).
-
----
-
-## Package Cheat Sheet
-
-### bootstrap (lifecycle)
+## Cheat sheet
 
 ```ts
-import { bootstrap } from '@mariachi/lifecycle';
-const { config, logger, startup, shutdown, health } = bootstrap();
-startup.register({ name: 'my-service', priority: 10, fn: async () => { ... } });
-await startup.runAll(logger);
-```
-
-### communication
-
-```ts
-import { createCommunication } from '@mariachi/communication';
-const communication = createCommunication();
-
-// Register a handler (in services app)
-communication.register('users.create', {
-  schema: { input: CreateUserInput, output: UserOutput },
-  handler: (ctx, input) => UsersService.create(ctx, input),
+// Procedure: register in the service layer (src/services/<d>/<d>.handler.ts)
+communication.register('orders.create', {
+  schema: { input: createOrderInput, output: orderSchema },
+  handler: (ctx, input) => service.create(ctx, input),
 });
 
-// Call a handler (in API controller)
-const result = await communication.call('users.create', ctx, input);
-```
-
-### controller (api-facade)
-
-```ts
-import { BaseController, type HttpContext } from '@mariachi/api-facade';
-
-export class OrdersController extends BaseController {
-  readonly prefix = 'orders';
-
-  init() {
-    this.post(this.buildPath(), this.create);
-    this.get(this.buildPath(':id'), this.getById);
-  }
-
-  create = async (ctx: HttpContext, body: unknown) => {
-    const input = CreateOrderInput.parse(body);
-    return communication.call('orders.create', ctx, input);
-  };
-}
-```
-
-### server (api-facade)
-
-```ts
-import { FastifyAdapter } from '@mariachi/api-facade';
-
-const server = new FastifyAdapter({ name: 'public' })
-  .withAuth(['session', 'api-key'])
-  .withRateLimit({ perUser: 1000, perApiKey: 5000, window: '1h' });
-
-server.registerController(new OrdersController());
-await server.listen(3000);
-```
-
-### database schema
-
-```ts
-import { defineTable } from '@mariachi/database';
-import { column } from '@mariachi/database';
-
-export const ordersTable = defineTable('orders', {
-  id:        column.uuid().primaryKey().defaultRandom(),
-  tenantId:  column.text().notNull(),
-  userId:    column.text().notNull(),
-  total:     column.numeric().notNull(),
-  status:    column.text().notNull(),
-  createdAt: column.timestamp().notNull().defaultNow(),
-  updatedAt: column.timestamp().notNull().defaultNow(),
-  deletedAt: column.timestamp(),
-});
-```
-
-### repository (database-postgres)
-
-```ts
-import { DrizzleRepository } from '@mariachi/database-postgres';
-import { orders } from '../compiled-schemas';
-
-export class DrizzleOrdersRepository extends DrizzleRepository<Order> {
-  constructor(db: DrizzleDb) {
-    super(orders, db, { tenantColumn: 'tenantId' });
-  }
-}
-```
-
-Inherited methods: `findById`, `findMany`, `create`, `update`, `softDelete`, `hardDelete`, `paginate`, `count`.
-
-### jobs
-
-```ts
-import { z } from 'zod';
-
-export const ProcessOrderJob = {
-  name: 'orders.process',
-  schema: z.object({ orderId: z.string() }),
-  retry: { attempts: 3, backoff: 'exponential' as const },
-  handler: async (data, ctx) => { ... },
-};
-```
-
-### events
-
-```ts
-const eventBus = createEventBus({ adapter: 'redis', url: process.env.REDIS_URL });
-await eventBus.publish('order.created', { orderId: '123' });
-await eventBus.subscribe('order.created', async (event) => { ... });
-```
-
-### cache
-
-```ts
-const cache = createCache({ adapter: 'redis', url: process.env.REDIS_URL });
-const user = await cache.getOrSet(
-  cache.key('users', userId),
-  3600,
-  () => repo.findById(ctx, userId),
+// Procedure: call from a controller. ctx first, then name, then input.
+this.post('/', { schema: { body: createOrderInput, response: orderSchema }, status: 201 }, (ctx, body) =>
+  this.call<OrderDto>(ctx, 'orders.create', body),
 );
+
+// Repository
+class OrdersRepository extends DrizzleRepository<Order> {
+  constructor(db: DrizzleDb) { super(ordersTable, db); }
+}
+await orders.getById(ctx, id);                              // NotFoundError if missing or another tenant's
+await orders.paginateCursor(ctx, { limit: 20, cursor });    // { data, nextCursor, hasMore }
+await withTransaction(db, ctx, async () => { /* repositories join the transaction */ });
+
+// Jobs
+await jobs.enqueue(ctx, 'send-digest', { userId });
+await jobs.enqueueWithDedup(ctx, 'send-digest', { userId }, `digest:${userId}`);
+
+// Events
+await events.publish(ctx, orderPlaced, { orderId });
+events.subscribe(orderPlaced, async (ctx, payload, meta) => { /* idempotent on meta.id */ }, { group: 'billing' });
+
+// Cache (DefaultCache over createCache(...) + createLock(...))
+const user = await cache.getOrSet(ctx, cache.key('users', id), () => users.getById(ctx, id), 300);
+await lock.withLock(`invoice:${id}`, 30_000, async () => { /* one instance at a time; lock = createLock(...) */ });
+
+// Errors
+throw new NotFoundError('order', id);
+throw new ConflictError('orders/already-paid', 'Paid orders cannot be cancelled');
+throw new ValidationError('Invalid date range', [{ path: ['to'], message: 'must be after from' }]);
 ```
 
-### testing
+## Gotchas
 
-```ts
-import { createTestHarness, createTestContext, TestRepository } from '@mariachi/testing';
-
-const harness = createTestHarness();
-const ctx = createTestContext();
-const repo = new TestRepository<User>();
-```
-
----
-
-## Common Gotchas
-
-1. **Communication handlers must be registered before `call()`**. Call your handler registration (e.g. `registerServiceHandlers(communication)`) before starting the API server.
-
-2. **No in-memory job adapter exists**. The worker uses BullMQ. Use `@mariachi/testing`'s `TestJobQueue` in tests.
-
-3. **`createCommunication()` returns an `InProcessAdapter`**. The communication layer is in-process only.
-
-4. **Soft deletes are the default**. `DrizzleRepository.softDelete()` sets `deletedAt`. All queries automatically filter out soft-deleted rows. Use `hardDelete()` only when explicitly needed.
-
-5. **Tenant isolation is automatic in `DrizzleRepository`**. When `tenantColumn` is set and `ctx.tenantId` is present, all queries are scoped to that tenant.
-
-6. **`bootstrap()` registers Config and Logger in the DI container**. Other services pull them via `getContainer().resolve(KEYS.Logger)`.
-
-7. **Controller route handlers receive `(ctx, body, params, query)`**. Use the controller's handler signature, not raw Fastify request.
-
-8. **Some planned adapters are not implemented**. This guide reflects actual code only (Postgres, Redis, BullMQ, etc.).
+1. **Argument order is `(ctx, ...)` everywhere**, including `communication.call(ctx, name, input)`,
+   job handlers `(ctx, data)` and event handlers `(ctx, payload, meta)`. Old examples with `ctx`
+   second are wrong.
+2. **Create one communication layer per process** and pass it around. A second `createCommunication()`
+   has no handlers, so calls fail with `communication/not-found`.
+3. **Registering a procedure name twice throws** at startup (`communication/duplicate-procedure`).
+4. **Tenant-scoped tables need `ctx.tenantId`.** Repositories throw `database/tenant-required`
+   without it. Background work across tenants must call `repository.crossTenant()` explicitly.
+5. **Reads hide soft-deleted rows.** Pass `{ withDeleted: true }` to see them; `hardDelete` really
+   deletes.
+6. **Output schemas strip fields.** If a field is missing from a response, add it to the contract's
+   output schema; don't loosen validation.
+7. **At-least-once means duplicates.** Job handlers, event subscribers and webhook processors must be
+   idempotent (`runOnce`, unique constraints, or upserts).
+8. **Enqueue or publish after commit**, or use the outbox. Inside a transaction, a job can run before
+   the row is visible.
+9. **Only worker processes call `jobs.start()`**, and they must register every schedule: `start()`
+   removes schedules it doesn't know.
+10. **Memory adapters are for tests.** `createJobQueue({ adapter: 'memory' })`,
+    `createEventBus({ adapter: 'memory' })` and `createCache({ adapter: 'memory' })` share nothing
+    across processes.
+11. **Keep the `// mariachi:*` marker comments** in registry files; generators insert above them.
+12. **Packages marked alpha in [packages.md](./packages.md)** are still being hardened. Check their
+    README and tests before relying on an API.
+13. **Pass your own idempotency key for money movement.** `billing.charge`, `refund`, `subscribe` and
+    `grantCredits` generate a key when you omit it, but that key is new on every call, so a retried
+    request charges twice. Use something stable: `order:${id}`.
+14. **Webhook handlers need the raw body.** Stripe, Slack and auth providers sign the exact bytes; use
+    `ctx.request.rawBody` or the webhooks package, never `JSON.stringify(body)`.
+15. **Email template values are escaped; `{{{raw}}}` is not.** Never put user input in a triple-brace
+    placeholder.
+16. **Search isn't tenant-scoped.** Index `tenantId` and filter on it in every query.
+17. **Doubles must pass the contract suites.** When you change a real adapter's behavior, update the
+    suite in `packages/testing/src/contracts/` so the double is forced to match.
