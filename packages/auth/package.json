@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/auth",
-  "version": "0.1.0",
+  "version": "0.0.5",
   "description": "JWT, OAuth, sessions, API keys with rotation and scopes, database-backed RBAC and brute-force protection.",
   "mariachi": {
     "category": "security",

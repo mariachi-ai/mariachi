@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/tenancy",
-  "version": "0.1.0",
+  "version": "0.0.5",
   "description": "Tenant resolution (subdomain, header, token) that fails closed.",
   "mariachi": {
     "category": "security",

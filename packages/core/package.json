@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/core",
-  "version": "0.1.0",
+  "version": "0.0.5",
   "description": "Context, typed errors, DI container, retry, idempotency and instrumentation primitives shared by every package.",
   "mariachi": {
     "category": "foundation",

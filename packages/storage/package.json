@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/storage",
-  "version": "0.1.0",
+  "version": "0.0.5",
   "description": "Object storage (S3 and compatibles, local disk, memory) with path-safe keys, streaming, presigned uploads and signed URLs.",
   "mariachi": {
     "category": "data",

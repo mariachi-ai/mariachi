@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/realtime",
-  "version": "0.1.0",
+  "version": "0.0.5",
   "description": "WebSockets with channel authorization, heartbeats, presence and cross-instance fanout.",
   "mariachi": {
     "category": "async",

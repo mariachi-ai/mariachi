@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/events",
-  "version": "0.1.0",
+  "version": "0.0.5",
   "description": "Domain events with envelopes, consumer groups, Redis Streams/NATS JetStream adapters, dead letters and a transactional outbox.",
   "mariachi": {
     "category": "async",

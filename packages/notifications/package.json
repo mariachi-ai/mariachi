@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/notifications",
-  "version": "0.1.0",
+  "version": "0.0.5",
   "description": "Email (Resend, SMTP), SMS (Twilio), push (FCM) and in-app notifications with preferences, per-channel queued delivery and delivery tracking.",
   "mariachi": {
     "category": "domain",

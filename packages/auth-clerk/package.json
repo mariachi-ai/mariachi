@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/auth-clerk",
-  "version": "0.1.0",
+  "version": "0.0.5",
   "description": "Clerk token verification and Svix-signed webhooks.",
   "mariachi": {
     "category": "security",

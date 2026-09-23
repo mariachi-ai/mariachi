@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/config",
-  "version": "0.1.0",
+  "version": "0.0.5",
   "description": "Typed, validated configuration from the environment, plus secrets and feature flags.",
   "mariachi": {
     "category": "foundation",

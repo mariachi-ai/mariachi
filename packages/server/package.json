@@ -1,6 +1,6 @@
 {
   "name": "@mariachi/server",
-  "version": "0.1.0",
+  "version": "0.0.5",
   "description": "HTTP transport on Fastify: request context, traceparent propagation, CORS, security headers, graceful close.",
   "mariachi": {
     "category": "http",
