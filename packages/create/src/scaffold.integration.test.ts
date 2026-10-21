@@ -12,10 +12,10 @@ const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const workDir = join(pkgRoot, '.scaffold-test');
 const project = join(workDir, 'app');
 
-async function sh(bin: string, args: string[]) {
+async function sh(bin: string, args: string[], cwd = project) {
   try {
     return await run(process.execPath, [join(pkgRoot, 'node_modules', bin), ...args], {
-      cwd: project,
+      cwd,
       maxBuffer: 16 * 1024 * 1024,
       // Turbo sets FORCE_COLOR; ANSI codes would break the output assertions.
       env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
@@ -85,5 +85,42 @@ describe('generated project', () => {
     } finally {
       await writeFile(file, original);
     }
+  });
+});
+
+describe('generated project with --auth ensemble', () => {
+  const app = join(workDir, 'ensemble-app');
+
+  beforeAll(async () => {
+    await rm(app, { recursive: true, force: true });
+    await createProject({ name: 'ensemble-app', outputDir: app, auth: 'ensemble' });
+    await generateEntity({ name: 'invoice-item', projectRoot: app });
+  }, 30_000);
+
+  afterAll(() => rm(workDir, { recursive: true, force: true }));
+
+  it('registers generated controllers beside the sign-in ones', async () => {
+    const controllers = await readFile(join(app, 'src/api/controllers/index.ts'), 'utf-8');
+    expect(controllers).toMatch(
+      /new MeController\(communication\),\n\s+new SignInController\(communication\),\n\s+new NotesController\(communication\),\n\s+new InvoiceItemsController\(communication\),/,
+    );
+  });
+
+  it('typechecks against the current framework packages', async () => {
+    await sh('typescript/bin/tsc', ['-p', 'tsconfig.json'], app);
+  }, 120_000);
+
+  it('passes its own generated tests (config, /api/me with org roles, the sign-in page)', async () => {
+    const { stdout } = await sh('vitest/vitest.mjs', ['run', '--root', app], app);
+    expect(stdout).toMatch(/src\/auth\.test\.ts/);
+    expect(stdout).toMatch(/me\.controller\.test\.ts/);
+    expect(stdout).toMatch(/sign-in\.controller\.test\.ts/);
+    expect(stdout).toMatch(/Tests\s+\d+ passed/);
+    expect(stdout).not.toMatch(/failed/);
+  }, 120_000);
+
+  it('passes mariachi validate with no findings', async () => {
+    const result = await validate(app);
+    expect(result.violations).toEqual([]);
   });
 });

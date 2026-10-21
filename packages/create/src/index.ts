@@ -10,8 +10,10 @@ export { validate, RULES } from './validate/index';
 export { names, pluralize, type Names } from './names';
 export { LAYOUT, MARKERS } from './layout';
 export { MARIACHI_VERSION } from './version';
+export { PROJECT_AUTH } from './types';
 
 export type {
+  ProjectAuth,
   ProjectConfig,
   GenerateOptions,
   GenerateEntityConfig,

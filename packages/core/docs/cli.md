@@ -6,7 +6,7 @@ in the environment win.
 ## init
 
 ```bash
-npx @mariachi/cli init my-app            # --name <pkg>, --no-example, --mariachi-version <range>
+npx @mariachi/cli init my-app            # --name <pkg>, --no-example, --mariachi-version <range>, --auth jwt|ensemble
 ```
 
 Creates the [project layout](./architecture.md#project-layout): `src/main.ts` (config, lifecycle,
@@ -14,6 +14,14 @@ Postgres, BullMQ jobs, communication, API server with JWT auth, health and OpenA
 `docker-compose.yml` (Postgres + Redis), `.env.example`, `vitest.config.ts`, `AGENTS.md`, and an example
 `note` entity wired end to end. Dependencies are pinned to the framework version that generated the
 project. The directory must be empty or not exist.
+
+`--auth ensemble` signs users in with Ensemble's per-app auth instead of HS256 JWTs: GoTrue at
+`/auth/v1` on the app's host, verified with `@mariachi/auth-gotrue` (configured from `AUTH_URL`,
+`AUTH_ORIGIN` or `APP_ORIGIN`, else GoTrue on the preview's loopback with its discovered issuer), and
+`@mariachi/tenancy` taking the tenant from the `org_id` claim (roles include `org_role`). It adds
+`ensemble.environment.json` (the environment's settings: Compose with Postgres and Redis, the `/`
+route, `auth`), `seed/users.yaml` (an admin and a member persona), `.env.ensemble` (what a preview runs
+with), `GET /api/me` and an example sign-in page at `/api/sign-in` (password, sign-up, magic link).
 
 ## generate
 
