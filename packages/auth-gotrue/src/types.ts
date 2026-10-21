@@ -11,6 +11,15 @@ export interface GoTrueConfig {
    * `GOTRUE_JWT_ISSUER` is configured, so configure it to the same value.
    */
   issuer?: string;
+  /**
+   * Learn the issuer from GoTrue's discovery document (`<url>/.well-known/openid-configuration`)
+   * instead of assuming `url`: for an app that reaches GoTrue on an internal address and doesn't
+   * know its own public origin (in an Ensemble preview, `url: 'http://127.0.0.1:9999'`). The
+   * document is re-read after `jwksCacheMaxAgeMs`, like the JWKS, so a fork that changes the host
+   * (and with it GoTrue's issuer) is picked up. Only use it with a `url` you trust as much as the
+   * JWKS (the same GoTrue). Not with `issuer`.
+   */
+  discoverIssuer?: boolean;
   /** The `aud` every token must carry. Default `authenticated` (GoTrue's `GOTRUE_JWT_AUD`). */
   audience?: string | string[];
   /** Accepted signing algorithms. Default `['ES256']`; never include an HMAC algorithm. */

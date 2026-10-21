@@ -151,7 +151,13 @@ describe('@mariachi/auth-gotrue against GoTrue v2.197.0', () => {
       identityType: 'session',
       sessionId: signin.body.user ? expect.any(String) : undefined,
     });
-    expect(identity.claims).toMatchObject({ aal: 'aal1', app_metadata: { persona: 'admin' } });
+    expect(identity.claims).toMatchObject({ aal: 'aal1', app_metadata: { persona: 'admin' }, org_id: 'org-from-hook', org_role: 'owner' });
+
+    // From the internal address alone: the issuer comes from GoTrue's discovery document (GOTRUE_JWT_ISSUER).
+    await expect(createGoTrueAuth({ url: gotrue, discoverIssuer: true }).verify(signin.body.access_token)).resolves.toMatchObject({
+      userId: created.body.id,
+      tenantId: 'org-from-hook',
+    });
 
     // GoTrue's hook call was signed and the handler normalized it.
     expect(hookEvents.length).toBeGreaterThan(0);
