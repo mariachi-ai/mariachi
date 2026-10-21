@@ -6,6 +6,14 @@ export interface AuthMiddlewareOptions {
   getToken?: (ctx: Context) => string | null;
 }
 
+/**
+ * The context after `createAuthMiddleware`: `Context` plus the verified token's claims
+ * (`ResolvedIdentity.claims`), which tenancy's `jwt-claim` strategy and provider-specific code read.
+ */
+export interface AuthenticatedContext extends Context {
+  jwtClaims?: Record<string, unknown>;
+}
+
 export function createAuthMiddleware(adapter: AuthenticationAdapter, options?: AuthMiddlewareOptions): Middleware {
   const getToken = options?.getToken ?? ((ctx: Context) => (ctx as Context & { token?: string }).token ?? null);
 
@@ -25,6 +33,7 @@ export function createAuthMiddleware(adapter: AuthenticationAdapter, options?: A
     ctx.identityType = identity.identityType;
     ctx.apiKeyId = identity.apiKeyId;
     ctx.sessionId = identity.sessionId;
+    (ctx as AuthenticatedContext).jwtClaims = identity.claims;
     await next();
   };
 }

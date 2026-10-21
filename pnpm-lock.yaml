@@ -1111,6 +1111,12 @@ importers:
         specifier: workspace:*
         version: link:../core
     devDependencies:
+      '@mariachi/api-facade':
+        specifier: workspace:*
+        version: link:../api-facade
+      '@mariachi/auth':
+        specifier: workspace:*
+        version: link:../auth
       tsup:
         specifier: ^8
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.9.1)

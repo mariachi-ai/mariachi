@@ -14,6 +14,8 @@ export interface ResolvedIdentity {
   roles?: string[];
   apiKeyId?: string;
   sessionId?: string;
+  /** The verified token's claims, when the strategy's verifier returns them (e.g. `@mariachi/auth-gotrue`). */
+  claims?: Record<string, unknown>;
 }
 
 /** @deprecated alias of ResolvedIdentity */

@@ -34,7 +34,7 @@ After verification, the rest of the stack (controllers, services, RBAC, tenancy)
      - **Provider-specific middleware** — e.g. `createClerkMiddleware(provider)` from `@mariachi/auth-clerk` — which calls `provider.verify(token)` and sets `ctx.userId`, `ctx.tenantId`, `ctx.scopes`, etc.
      - **Core middleware** — `createAuthMiddleware(adapter)` from `@mariachi/auth` expects an `AuthenticationAdapter` (verify + sign). Providers only implement verify; for sign you’d use a small wrapper or a separate JWT signer if you need to issue tokens yourself.
 
-3. **Context** — Middleware (or the API facade’s auth step) sets `ctx.userId`, `ctx.tenantId`, `ctx.scopes`, `ctx.identityType`. Controllers and services use this context; they do not care which provider produced it.
+3. **Context** — Middleware (or the API facade’s auth step) sets `ctx.userId`, `ctx.tenantId`, `ctx.scopes`, `ctx.identityType`. Controllers and services use this context; they do not care which provider produced it. The verified token’s claims (`ResolvedIdentity.claims`, filled by `JWTAdapter` and `@mariachi/auth-gotrue`) travel too: `createAuthMiddleware` sets `ctx.jwtClaims`, and the API facade keeps the identity on `ctx.identity` (`ctx.identity.claims`). `@mariachi/tenancy`’s `jwt-claim` strategy reads either, so `createTenancy({ strategy: 'jwt-claim', claimName: 'org_id' })` resolves the tenant from GoTrue’s org claim and refuses a claim that disagrees with `ctx.tenantId` (`tenancy/mismatch`).
 
 4. **Authorization** — `Auth.authorize(ctx, action, resource)` (and RBAC) uses `ctx.userId`, `ctx.tenantId`, and `ctx.scopes` from the same context.
 

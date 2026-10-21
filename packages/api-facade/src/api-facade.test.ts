@@ -88,6 +88,19 @@ describe('api-facade', () => {
     expect(mismatch.json<{ error: { code: string } }>().error.code).toBe('tenancy/mismatch');
   });
 
+  it("exposes the verifier's claims on ctx.identity for handlers and middleware", async () => {
+    const claims = { sub: 'u1', org_id: 't1', org_role: 'admin', act: { sub: 'reviewer' } };
+    const s = createApiServer({ name: 'claims', logger: silent })
+      .withAuthStrategy(
+        'session',
+        bearerStrategy({ verify: async () => ({ userId: 'u1', tenantId: 't1', scopes: [], identityType: 'session', claims }) }),
+      )
+      .withAuth('session')
+      .register([{ method: 'GET', path: '/me', handler: async (ctx) => ({ claims: ctx.identity?.claims }) }]);
+    const res = await s.inject({ method: 'GET', url: '/me', headers: { authorization: 'Bearer t' } });
+    expect(res.json()).toEqual({ claims });
+  });
+
   it('fails at startup when a route references an unregistered strategy', async () => {
     const s = createApiServer({ name: 'x', logger: silent }).withAuth('api-key').register([
       { method: 'GET', path: '/x', handler: async () => ({}) },
