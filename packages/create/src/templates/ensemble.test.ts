@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import { createProject } from '../generators';
-import { AUTH_PATH } from './ensemble';
+import { AUTH_PATH, organizationSlug } from './ensemble';
 import { projectFiles } from './project';
 
 /**
@@ -33,21 +33,30 @@ const environmentConfigSchema = z
     auth: specAuthSchema,
   })
   .strict();
-const appAuthSeedUsersSchema = z.object({
-  users: z
-    .array(
-      z
-        .object({
-          email: z.string().email().max(254),
-          persona: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/).optional(),
-          password: z.string().min(8).max(72).optional(),
-          appMetadata: z.record(z.unknown()).optional(),
-          userMetadata: z.record(z.unknown()).optional(),
-        })
-        .strict(),
-    )
-    .max(200),
-});
+const orgSlug = z.string().regex(/^[a-z0-9][a-z0-9-]{0,62}$/);
+const orgRole = z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/);
+const appAuthSeedUsersSchema = z
+  .object({
+    organizations: z.array(z.object({ slug: orgSlug, name: z.string().min(1).max(200).optional() }).strict()).max(50).optional(),
+    users: z
+      .array(
+        z
+          .object({
+            email: z.string().email().max(254),
+            persona: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/).optional(),
+            password: z.string().min(8).max(72).optional(),
+            appMetadata: z.record(z.unknown()).optional(),
+            userMetadata: z.record(z.unknown()).optional(),
+            orgs: z.array(z.object({ slug: orgSlug, role: orgRole.default('member') }).strict()).max(20).optional(),
+          })
+          .strict(),
+      )
+      .max(200),
+  })
+  .strict()
+  .refine((f) => f.users.every((u) => (u.orgs ?? []).every((o) => f.organizations?.some((org) => org.slug === o.slug))), {
+    message: "a user's org must be listed under organizations",
+  });
 // The API resolves GoTrue's database from the first Postgres service's POSTGRES_DB (resolveAuthTarget).
 const POSTGRES_IMAGE = /(^|\/)(postgres|postgis|timescaledb|supabase\/postgres)[^/]*(:|@|$)/i;
 const IDENT = /^[A-Za-z_][A-Za-z0-9_$-]{0,62}$/;
@@ -112,10 +121,24 @@ describe('mariachi init --auth ensemble', () => {
     expect(files['.env.ensemble']).not.toMatch(/^AUTH_URL=/m);
   });
 
-  it('seeds an admin and a member persona that satisfy the seed users contract', () => {
+  it("seeds the project's organization with an admin and a member persona, per the seed users contract", () => {
     const seed = appAuthSeedUsersSchema.parse(parseYaml(files['seed/users.yaml']));
-    expect(seed.users.map((u) => u.persona)).toEqual(['admin', 'member']);
+    expect(seed.organizations).toEqual([{ slug: 'acme-app', name: 'acme-app' }]);
+    expect(seed.users.map((u) => [u.persona, u.orgs])).toEqual([
+      ['admin', [{ slug: 'acme-app', role: 'admin' }]],
+      ['member', [{ slug: 'acme-app', role: 'member' }]],
+    ]);
     expect(new Set(seed.users.map((u) => u.email.toLowerCase())).size).toBe(seed.users.length);
+    // A scoped package name still gives a valid slug, and a quoted organization name.
+    const scoped = appAuthSeedUsersSchema.parse(parseYaml(projectFiles('@acme/My_App', '^0.1.0', 'ensemble')['seed/users.yaml']));
+    expect(scoped.organizations).toEqual([{ slug: 'my-app', name: '@acme/My_App' }]);
+  });
+
+  it('derives an organization slug Ensemble accepts', () => {
+    expect(organizationSlug('acme-app')).toBe('acme-app');
+    expect(organizationSlug('@scope/Big__App.v2')).toBe('big-app-v2');
+    expect(organizationSlug('_')).toBe('acme');
+    expect(organizationSlug(`x${'-y'.repeat(40)}`)).toMatch(/^[a-z0-9][a-z0-9-]{0,62}$/);
   });
 
   it('ships a sign-in page whose script compiles and targets the environment auth path', () => {

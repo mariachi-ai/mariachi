@@ -20,6 +20,21 @@ export function databaseName(name: string): string {
   return name.replace(/[^a-z0-9_]/gi, '_');
 }
 
+/**
+ * The seeded organization's slug, from the package name (Ensemble's org slugs: a-z, 0-9 and -,
+ * starting with a letter or digit, at most 63).
+ */
+export function organizationSlug(name: string): string {
+  const slug = name
+    .replace(/^@[^/]+\//, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 63)
+    .replace(/-+$/, '');
+  return slug || 'acme';
+}
+
 export function ensembleFiles(name: string): Record<string, string> {
   const db = databaseName(name);
   const compose = composeYaml(db);
@@ -28,7 +43,7 @@ export function ensembleFiles(name: string): Record<string, string> {
     '.env.ensemble': ENV_ENSEMBLE(name, db),
     'docker-compose.yml': compose,
     'ensemble.environment.json': `${JSON.stringify(environmentConfig(compose), null, 2)}\n`,
-    'seed/users.yaml': SEED_USERS,
+    'seed/users.yaml': SEED_USERS(organizationSlug(name), name),
     'README.md': README(name),
     'AGENTS.md': AGENTS_AUTH,
     'src/config.ts': CONFIG_TS,
@@ -103,7 +118,7 @@ MIGRATE_ON_START=true
 # http://127.0.0.1:9999) and names the preview's public issuer in its discovery document.
 `;
 
-const SEED_USERS = `# Personas Ensemble creates in each preview's GoTrue when it builds the environment
+const SEED_USERS = (org: string, name: string) => `# Personas Ensemble creates in each preview's GoTrue when it builds the environment
 # (the environment's auth.seedUsers). Each is a confirmed user with app_metadata.persona set,
 # which "view as" and the Users tab list.
 #
@@ -111,19 +126,30 @@ const SEED_USERS = `# Personas Ensemble creates in each preview's GoTrue when it
 # accounts only. Leave a password out and that persona signs in by magic link (the preview
 # mailbox) or "view as".
 #
-# A persona's organization and role (the org_id and org_role claims the API reads) come from
-# Ensemble's organizations, not from this file.
+# The build creates the organizations and memberships in Ensemble's layer (ensemble_auth). A
+# user's first org is their active one, and every token then carries it: org_id (the tenant),
+# org_slug and org_role. Roles are free slugs; Ensemble's UI offers owner, admin and member.
+# GET /api/me/admin admits owner and admin.
+organizations:
+  - slug: ${org}
+    name: ${JSON.stringify(name)}
 users:
   - email: admin@example.test
     persona: admin
     password: admin-preview-password
     userMetadata:
       name: Ada Admin
+    orgs:
+      - slug: ${org}
+        role: admin
   - email: member@example.test
     persona: member
     password: member-preview-password
     userMetadata:
       name: Max Member
+    orgs:
+      - slug: ${org}
+        role: member
 `;
 
 const CONFIG_TS = `import { registerConfigSection } from '@mariachi/config';
@@ -277,7 +303,7 @@ async function main(): Promise<void> {
 
   // Sign-in is Ensemble's: GoTrue beside the app at ${AUTH_PATH}, its ES256 tokens checked against its JWKS.
   const auth = createGoTrueAuth(goTrueConfig(app.auth));
-  // The tenant is the organization in the token (org_id, added by Ensemble's access-token hook). A
+  // The tenant is the user's active organization (org_id, a uuid Ensemble's access-token hook adds). A
   // claim or x-tenant-id header that disagrees with the verified identity is refused (tenancy/mismatch).
   const tenancy = createTenancy({ strategy: 'jwt-claim', claimName: 'org_id' }, instrumentation);
 
@@ -332,12 +358,18 @@ export function createControllers(communication: CommunicationLayer): BaseContro
 `;
 
 const ME_CONTROLLER = `import { BaseController } from '@mariachi/api-facade';
+import { AuthError } from '@mariachi/core';
 import { z } from 'zod';
+
+/** Organization roles that may administer it (Ensemble's UI offers owner, admin and member). */
+export const ADMIN_ROLES = ['owner', 'admin'];
 
 const meResponse = z.object({
   userId: z.string(),
-  /** The organization (\`org_id\`). */
+  /** The active organization's id (\`org_id\`, a uuid). */
   tenantId: z.string(),
+  /** Its slug (\`org_slug\`). */
+  orgSlug: z.string().optional(),
   /** \`authenticated\` plus the role in the organization (\`org_role\`). */
   roles: z.array(z.string()),
   email: z.string().optional(),
@@ -363,17 +395,22 @@ export class MeController extends BaseController {
       return {
         userId: ctx.userId ?? '',
         tenantId: ctx.tenantId ?? '',
+        orgSlug: text(claims.org_slug),
         roles: ctx.identity?.roles ?? [],
         email: text(claims.email),
         persona: text(record(claims.app_metadata).persona),
-        actingAs: text(record(claims.act).sub),
+        actingAs: text(record(claims.act).email) ?? text(record(claims.act).sub),
       };
     });
 
-    // Roles (and so scopes) include the organization role: \`scopes: ['admin']\` admits its admins.
-    this.get('/admin', { scopes: ['admin'], schema: { response: z.object({ admin: z.literal(true) }) } }, async () => ({
-      admin: true as const,
-    }));
+    // Roles include the organization role (\`org_role\`). Route \`scopes\` need every listed one, so a
+    // check for any of several roles goes in the handler.
+    this.get('/admin', { schema: { response: z.object({ admin: z.literal(true) }) } }, async (ctx) => {
+      if (!ctx.identity?.roles?.some((r) => ADMIN_ROLES.includes(r))) {
+        throw new AuthError('auth/forbidden', 'Organization owners and admins only');
+      }
+      return { admin: true as const };
+    });
   }
 }
 `;
@@ -385,16 +422,29 @@ import { MeController } from './me.controller';
 
 const logger = { debug() {}, info() {}, warn() {}, error() {}, child: () => logger } as unknown as Logger;
 
-// What @mariachi/auth-gotrue returns for the seeded personas once Ensemble's hook added their org claims.
+// What @mariachi/auth-gotrue returns for the seeded personas: Ensemble's hook adds org_id (a uuid),
+// org_slug and org_role.
+const ORG = '0b7c3f0e-5d1a-4c9e-9a51-3f7d2a6c8e10';
 const persona = (name: string, orgRole: string): ResolvedIdentity => ({
   userId: \`user-\${name}\`,
-  tenantId: 'org-acme',
+  tenantId: ORG,
   scopes: ['authenticated', orgRole],
   roles: ['authenticated', orgRole],
   identityType: 'session',
-  claims: { sub: \`user-\${name}\`, email: \`\${name}@example.test\`, org_id: 'org-acme', org_role: orgRole, app_metadata: { persona: name } },
+  claims: {
+    sub: \`user-\${name}\`,
+    email: \`\${name}@example.test\`,
+    org_id: ORG,
+    org_slug: 'acme',
+    org_role: orgRole,
+    app_metadata: { persona: name },
+  },
 });
-const tokens: Record<string, ResolvedIdentity> = { admin: persona('admin', 'admin'), member: persona('member', 'member') };
+const tokens: Record<string, ResolvedIdentity> = {
+  owner: persona('owner', 'owner'),
+  admin: persona('admin', 'admin'),
+  member: persona('member', 'member'),
+};
 
 function server() {
   const verifier = {
@@ -419,14 +469,16 @@ describe('MeController', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       userId: 'user-member',
-      tenantId: 'org-acme',
+      tenantId: ORG,
+      orgSlug: 'acme',
       roles: ['authenticated', 'member'],
       email: 'member@example.test',
       persona: 'member',
     });
   });
 
-  it("admits only the organization's admins to /me/admin", async () => {
+  it("admits only the organization's owners and admins to /me/admin", async () => {
+    expect((await get('/api/me/admin', 'owner')).statusCode).toBe(200);
     expect((await get('/api/me/admin', 'admin')).statusCode).toBe(200);
     expect((await get('/api/me/admin', 'member')).statusCode).toBe(403);
   });
@@ -588,7 +640,7 @@ async function render() {
   const body = await res.json().catch(() => ({}));
   if (res.ok) show('Signed in.', body);
   else if (body.error && body.error.code === 'tenancy/missing-tenant') {
-    show('Signed in, but the token names no organization (org_id), which the API needs. Ensemble adds it for a member of an organization.', body);
+    show('Signed in, but not a member of any organization yet, and the API needs one (org_id). Seeded personas have one; add others with an invitation or from the Users tab.', body);
   } else show('GET /api/me answered ' + res.status, body);
 }
 
@@ -674,10 +726,13 @@ with \`@mariachi/core\`:
 
 - Users sign in with GoTrue (Ensemble's per-app auth) at \`${AUTH_PATH}\` on the app's own host; never add
   another auth provider or store passwords. \`@mariachi/auth-gotrue\` verifies the tokens.
-- \`ctx.tenantId\` is the user's organization (the \`org_id\` claim); tenant-scoped tables and repositories
-  rely on it. Never take the tenant from the request body.
-- \`ctx.identity.roles\` holds \`authenticated\` and the organization role (\`org_role\`); gate a route with
-  \`scopes: ['admin']\`. Other claims (\`app_metadata\`, \`act\` for "view as") are in \`ctx.identity.claims\`.
+- \`ctx.tenantId\` is the user's active organization (the \`org_id\` claim, a uuid; \`org_slug\` is in the
+  claims too); tenant-scoped tables and repositories rely on it. Never take the tenant from the request
+  body. Organizations, memberships and invitations live in Ensemble's layer (\`ensemble_auth\`).
+- \`ctx.identity.roles\` holds \`authenticated\` and the organization role (\`org_role\`: owner, admin,
+  member, or any slug). Route \`scopes\` need every listed one; for "owner or admin" check the roles in
+  the handler (see \`GET /api/me/admin\`). Other claims (\`app_metadata\`, \`act\` for "view as") are in
+  \`ctx.identity.claims\`.
 
 ## Generators
 
@@ -707,7 +762,8 @@ organization (\`@mariachi/tenancy\`, the \`org_id\` claim).
    (\`/\` → port 3000) and sign-in (\`auth\`: provider \`ensemble\`, path \`${AUTH_PATH}\`, seed users
    \`seed/users.yaml\`) in the environment's settings, or send the file as \`config\` to
    \`POST /api/environments\` (or \`PATCH /api/environments/:id\`). Sign-in needs the VM tier (Firecracker).
-3. Open \`/api/sign-in\` on the preview and sign in as a persona from \`seed/users.yaml\`, or sign up.
+3. Open \`/api/sign-in\` on the preview and sign in as a persona from \`seed/users.yaml\`. A new sign-up
+   has no organization until it's invited to one.
 
 The app gets no environment variables from Ensemble, so \`pnpm dev\` loads \`.env.ensemble\` (no
 secrets) and then \`.env\` over it. With no \`AUTH_URL\` it reads GoTrue on the guest's loopback
@@ -745,13 +801,17 @@ await fetch('/api/me', { headers: { authorization: \`Bearer \${data.session?.acc
 
 ## Organizations and roles
 
-- \`ctx.tenantId\` is the organization in the token (\`org_id\`), added by Ensemble's access-token hook
-  for a member of an organization. A token without one gets \`tenancy/missing-tenant\` from every route
-  that needs sign-in, and a request naming another tenant gets \`tenancy/mismatch\`.
-- \`ctx.identity.roles\` is \`authenticated\` plus the role in that organization (\`org_role\`): gate a route
-  with \`scopes: ['admin']\` (see \`GET /api/me/admin\`).
-- \`seed/users.yaml\` declares the personas each preview starts with (\`admin\`, \`member\`). Their
-  passwords are readable by anyone with the repository: preview test accounts only.
+- Organizations, memberships and invitations live in Ensemble's layer (\`ensemble_auth\`, in this app's
+  database). Its access-token hook puts the user's active organization in every token: \`org_id\` (a
+  uuid), \`org_slug\` and \`org_role\`, plus \`act\` when a reviewer is signed in as the user ("view as").
+- \`ctx.tenantId\` is \`org_id\`. A user who belongs to no organization yet (a fresh sign-up, before an
+  invitation) gets \`tenancy/missing-tenant\` from every route that needs sign-in, and a request
+  naming another tenant gets \`tenancy/mismatch\`.
+- \`ctx.identity.roles\` is \`authenticated\` plus \`org_role\`. \`GET /api/me/admin\` admits owners and
+  admins (route \`scopes\` need every listed one, so an any-of check goes in the handler).
+- \`seed/users.yaml\` declares the organization and the personas each preview starts with: \`admin\`
+  (role admin) and \`member\` (role member). Their passwords are readable by anyone with the
+  repository: preview test accounts only.
 
 ## Settings
 

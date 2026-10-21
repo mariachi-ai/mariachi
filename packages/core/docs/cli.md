@@ -20,7 +20,7 @@ project. The directory must be empty or not exist.
 `AUTH_ORIGIN` or `APP_ORIGIN`, else GoTrue on the preview's loopback with its discovered issuer), and
 `@mariachi/tenancy` taking the tenant from the `org_id` claim (roles include `org_role`). It adds
 `ensemble.environment.json` (the environment's settings: Compose with Postgres and Redis, the `/`
-route, `auth`), `seed/users.yaml` (an admin and a member persona), `.env.ensemble` (what a preview runs
+route, `auth`), `seed/users.yaml` (the project's organization with an admin and a member persona), `.env.ensemble` (what a preview runs
 with), `GET /api/me` and an example sign-in page at `/api/sign-in` (password, sign-up, magic link).
 
 ## generate
