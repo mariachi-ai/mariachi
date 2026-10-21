@@ -1,0 +1,51 @@
+{
+  "name": "@mariachi/auth-gotrue",
+  "version": "0.0.5",
+  "description": "GoTrue (Supabase Auth) JWT verification through its JWKS (ES256), and its signed hooks (Standard Webhooks).",
+  "mariachi": {
+    "category": "security",
+    "status": "alpha",
+    "useWhen": "Using GoTrue (Supabase Auth, or Ensemble's per-app auth) as the identity provider",
+    "entry": [
+      "createGoTrueAuth",
+      "GoTrueWebhookHandler"
+    ]
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@mariachi/auth": "workspace:*",
+    "@mariachi/core": "workspace:*",
+    "jose": "^6"
+  },
+  "devDependencies": {
+    "typescript": "^5.7",
+    "tsup": "^8",
+    "vitest": "^3"
+  }
+}

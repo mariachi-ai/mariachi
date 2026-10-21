@@ -494,6 +494,28 @@ importers:
         specifier: ^3
         version: 3.2.4(@types/node@22.19.11)(jiti@2.7.0)(yaml@2.9.1)
 
+  packages/auth-gotrue:
+    dependencies:
+      '@mariachi/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@mariachi/core':
+        specifier: workspace:*
+        version: link:../core
+      jose:
+        specifier: ^6
+        version: 6.2.1
+    devDependencies:
+      tsup:
+        specifier: ^8
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.9.1)
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+      vitest:
+        specifier: ^3
+        version: 3.2.4(@types/node@22.19.11)(jiti@2.7.0)(yaml@2.9.1)
+
   packages/billing:
     dependencies:
       '@mariachi/core':
