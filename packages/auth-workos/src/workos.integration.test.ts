@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createWorkOSAuth, createWorkOSIdentityClient } from './index';
 
 /**
@@ -12,8 +12,13 @@ const clientId = process.env.WORKOS_CLIENT_ID ?? '';
 const enabled = apiKey.startsWith('sk_test_') && clientId.startsWith('client_');
 
 describe.skipIf(!enabled)('WorkOS staging', () => {
-  const identity = createWorkOSIdentityClient({ apiKey, clientId });
-  const auth = createWorkOSAuth({ clientId });
+  // Built in beforeAll: a skipped describe still runs its body while the file is collected.
+  let identity: ReturnType<typeof createWorkOSIdentityClient>;
+  let auth: ReturnType<typeof createWorkOSAuth>;
+  beforeAll(() => {
+    identity = createWorkOSIdentityClient({ apiKey, clientId });
+    auth = createWorkOSAuth({ clientId });
+  });
   const created: string[] = [];
   const email = (tag: string) => `mariachi-it-${tag}-${randomBytes(4).toString('hex')}@example.org`;
   const password = () => `${randomBytes(18).toString('base64url')}Aa1!`;

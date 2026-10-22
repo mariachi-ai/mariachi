@@ -56,17 +56,19 @@ export async function startTypesense(): Promise<{ url: string; apiKey: string }>
   return { url: `http://${container.getHost()}:${container.getMappedPort(8108)}`, apiKey };
 }
 
-/** S3-compatible storage (MinIO). Set `S3_ENDPOINT` (+ `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`) to reuse one. */
+/**
+ * S3-compatible storage (RustFS, Apache-2.0: MinIO no longer publishes images). Set `S3_ENDPOINT`
+ * (+ `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`) to reuse one.
+ */
 export async function startMinio(): Promise<{ endpoint: string; accessKeyId: string; secretAccessKey: string }> {
   const accessKeyId = process.env.S3_ACCESS_KEY_ID ?? 'minioadmin';
   const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY ?? 'minioadmin';
   if (process.env.S3_ENDPOINT) return { endpoint: process.env.S3_ENDPOINT, accessKeyId, secretAccessKey };
   const { GenericContainer, Wait } = await import('testcontainers');
-  const container = await new GenericContainer('quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z')
-    .withEnvironment({ MINIO_ROOT_USER: accessKeyId, MINIO_ROOT_PASSWORD: secretAccessKey })
-    .withCommand(['server', '/data'])
+  const container = await new GenericContainer('rustfs/rustfs:1.0.2')
+    .withEnvironment({ RUSTFS_ACCESS_KEY: accessKeyId, RUSTFS_SECRET_KEY: secretAccessKey })
     .withExposedPorts(9000)
-    .withWaitStrategy(Wait.forHttp('/minio/health/live', 9000))
+    .withWaitStrategy(Wait.forHttp('/health', 9000))
     .start();
   started.push(container);
   return { endpoint: `http://${container.getHost()}:${container.getMappedPort(9000)}`, accessKeyId, secretAccessKey };
