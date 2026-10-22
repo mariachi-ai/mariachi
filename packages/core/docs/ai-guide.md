@@ -30,6 +30,9 @@ and `tsc --noEmit` before you finish.
 | Full-text search | `DefaultSearch` on Typesense | [search.md](./search.md) |
 | Limit a tenant's usage outside HTTP | `DefaultRateLimiting.consumeTier` | [http.md](./http.md#rate-limits) |
 | Test without infrastructure | `@mariachi/testing` doubles | [testing.md](./testing.md) |
+| Style a UI consistently | `@mariachi/design` classes + a preset (`data-theme`) | [design.md](./design.md), [design-catalog.md](./design-catalog.md) |
+| Change one colour, radius or component style | a token override in CSS, or `mariachi.design.ts` | [design.md](./design.md#override-anything-at-any-size) |
+| Look up a package, symbol, error code or component | the explorer, or its `/explorer.json` | [explorer.md](./explorer.md) |
 
 ## Cheat sheet
 
@@ -107,3 +110,11 @@ throw new ValidationError('Invalid date range', [{ path: ['to'], message: 'must 
 16. **Search isn't tenant-scoped.** Index `tenantId` and filter on it in every query.
 17. **Doubles must pass the contract suites.** When you change a real adapter's behavior, update the
     suite in `packages/testing/src/contracts/` so the double is forced to match.
+18. **Use design-catalog markup; never invent classes.** `m-` classes and data attributes are the
+    whole contract. Missing something? Compose with `m-stack`/`m-cluster`/`m-grid`, or add a
+    component with the recipe.
+19. **Override tokens, not selectors.** `:root { --m-button-radius: 999px }` changes every button;
+    `.area .m-card { --m-card-shadow: none }` changes one area. Rewriting `.m-button { … }` fights the
+    layers and breaks presets. Run `mariachi design check` after changing colours.
+20. **`data-mode` goes on the element with `data-theme`.** A bare `data-mode` on a descendant does
+    nothing; nest `data-theme="<preset>" data-mode="dark"` to switch a region.

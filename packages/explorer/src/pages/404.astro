@@ -1,0 +1,18 @@
+---
+import Base from '../layouts/Base.astro';
+import { href } from '../lib/url';
+---
+
+<Base title="Not found" noindex>
+  <header class="x-page-header">
+    <span class="x-eyebrow">404</span>
+    <h1>That page isn't here.</h1>
+    <p class="x-lede">It may have moved when the docs were regenerated. Try search (⌘K), or start from one of these:</p>
+    <div class="m-cluster">
+      <a class="m-button" data-variant="primary" href={href('')}>Home</a>
+      <a class="m-button" href={href('packages')}>Packages</a>
+      <a class="m-button" href={href('docs')}>Docs</a>
+      <a class="m-button" href={href('design')}>Design</a>
+    </div>
+  </header>
+</Base>

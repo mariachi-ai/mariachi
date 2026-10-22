@@ -1,0 +1,98 @@
+@layer mariachi.components {
+  .m-alert {
+    --_bg: var(--m-alert-bg);
+    --_fg: var(--m-alert-fg);
+    --_border: var(--m-alert-border);
+    --_title: var(--m-alert-fg);
+
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--m-alert-gap);
+    padding: var(--m-alert-padding);
+    border: var(--m-alert-border-width) solid var(--_border);
+    border-inline-start-width: var(--m-alert-accent-width);
+    border-radius: var(--m-alert-radius);
+    background: var(--_bg);
+    color: var(--_fg);
+    box-shadow: var(--m-alert-shadow);
+    font-size: var(--m-alert-font-size);
+  }
+
+  .m-alert:has(> .m-alert-icon) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .m-alert[data-tone="accent"] {
+    --_bg: var(--m-color-accent-subtle);
+    --_fg: var(--m-color-fg-default);
+    --_border: var(--m-color-accent-default);
+    --_title: var(--m-color-accent-text);
+  }
+
+  .m-alert[data-tone="success"] {
+    --_bg: var(--m-color-success-bg);
+    --_fg: var(--m-color-success-fg);
+    --_border: var(--m-color-success-border);
+    --_title: var(--m-color-success-fg);
+  }
+
+  .m-alert[data-tone="warning"] {
+    --_bg: var(--m-color-warning-bg);
+    --_fg: var(--m-color-warning-fg);
+    --_border: var(--m-color-warning-border);
+    --_title: var(--m-color-warning-fg);
+  }
+
+  .m-alert[data-tone="danger"] {
+    --_bg: var(--m-color-danger-bg);
+    --_fg: var(--m-color-danger-fg);
+    --_border: var(--m-color-danger-border);
+    --_title: var(--m-color-danger-fg);
+  }
+
+  .m-alert[data-tone="info"] {
+    --_bg: var(--m-color-info-bg);
+    --_fg: var(--m-color-info-fg);
+    --_border: var(--m-color-info-border);
+    --_title: var(--m-color-info-fg);
+  }
+
+  .m-alert-icon {
+    display: inline-flex;
+    align-self: start;
+    align-items: center;
+    justify-content: center;
+    min-block-size: calc(1em * var(--m-font-leading-normal));
+    color: var(--_title);
+    line-height: 1;
+  }
+
+  .m-alert-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--m-space-1);
+    min-inline-size: 0;
+  }
+
+  .m-alert-title {
+    color: var(--_title);
+    font-weight: var(--m-alert-title-weight);
+  }
+
+  .m-alert-body {
+    color: inherit;
+  }
+
+  .m-alert-body a,
+  .m-alert-title a {
+    color: inherit;
+    text-decoration: underline;
+  }
+
+  .m-alert-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--m-space-2);
+    margin-block-start: var(--m-space-2);
+  }
+}

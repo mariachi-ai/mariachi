@@ -62,3 +62,62 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test:integration
+
+  explorer:
+    # Browser checks and visual regression for @mariachi/explorer and @mariachi/design. Runs in the
+    # Playwright image so screenshots match the committed Linux baselines.
+    runs-on: ubuntu-latest
+    needs: check
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter @mariachi/explorer test:browser
+      - run: pnpm --filter @mariachi/explorer test:visual
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: explorer-playwright-report
+          path: packages/explorer/playwright-report
+          retention-days: 7
+
+  explorer-pages:
+    # Publishes the explorer to GitHub Pages from main, under /<repo>/.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: explorer
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    concurrency: pages
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter @mariachi/explorer build
+        env:
+          EXPLORER_BASE: /${{ github.event.repository.name }}/
+          EXPLORER_SITE: https://${{ github.repository_owner }}.github.io
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: packages/explorer/dist/site
+      - id: deploy
+        uses: actions/deploy-pages@v4

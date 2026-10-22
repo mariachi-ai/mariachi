@@ -1,0 +1,93 @@
+@layer mariachi.components {
+  .m-navbar {
+    --_bg: var(--m-navbar-bg);
+
+    display: flex;
+    align-items: center;
+    gap: var(--m-navbar-gap);
+    block-size: var(--m-navbar-height);
+    padding-inline: var(--m-navbar-padding-x);
+    border-block-end: var(--m-navbar-border-width) solid var(--m-navbar-border);
+    background: var(--_bg);
+    color: var(--m-navbar-fg);
+    box-shadow: var(--m-navbar-shadow);
+    min-inline-size: 0;
+  }
+
+  .m-navbar[data-sticky] {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: var(--m-navbar-z-index);
+  }
+
+  .m-navbar[data-translucent] {
+    background: color-mix(in oklab, var(--_bg) var(--m-navbar-translucent-opacity), transparent);
+    backdrop-filter: var(--m-navbar-backdrop-filter);
+  }
+
+  .m-navbar-brand {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--m-space-2);
+    color: inherit;
+    font-family: var(--m-navbar-brand-family);
+    font-size: var(--m-navbar-brand-size);
+    font-weight: var(--m-navbar-brand-weight);
+    text-decoration: none;
+    text-transform: var(--m-navbar-brand-transform);
+    white-space: nowrap;
+  }
+
+  /* Contained inline size: the nav never widens the bar; it fills the free space and scrolls. */
+  .m-navbar-nav {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    gap: var(--m-space-1);
+    min-inline-size: 0;
+    contain: inline-size;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .m-navbar-nav :is(ul, ol) {
+    display: contents;
+    list-style: none;
+  }
+
+  .m-navbar-link {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--m-space-2);
+    block-size: var(--m-navbar-link-height);
+    padding-inline: var(--m-navbar-link-padding-x);
+    border-radius: var(--m-navbar-link-radius);
+    color: var(--m-navbar-link-fg);
+    font-size: var(--m-navbar-link-font-size);
+    font-weight: var(--m-navbar-link-font-weight);
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+      color var(--m-motion-duration-fast) var(--m-motion-easing-standard),
+      background-color var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-navbar-link:hover {
+    background: var(--m-navbar-link-hover-bg);
+    color: var(--m-navbar-link-hover-fg);
+  }
+
+  .m-navbar-link[aria-current="page"] {
+    background: var(--m-navbar-link-active-bg);
+    color: var(--m-navbar-link-active-fg);
+  }
+
+  .m-navbar-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--m-space-2);
+  }
+}

@@ -1,0 +1,23 @@
+@layer mariachi.components {
+  .m-spinner {
+    --_size: var(--m-spinner-size-md);
+
+    display: inline-block;
+    flex: none;
+    inline-size: var(--_size);
+    block-size: var(--_size);
+    border: var(--m-spinner-thickness) solid var(--m-spinner-track);
+    border-block-start-color: var(--m-spinner-color);
+    border-radius: var(--m-spinner-radius);
+    vertical-align: middle;
+    animation: m-spin var(--m-spinner-duration) linear infinite;
+  }
+
+  .m-spinner[data-size="sm"] {
+    --_size: var(--m-spinner-size-sm);
+  }
+
+  .m-spinner[data-size="lg"] {
+    --_size: var(--m-spinner-size-lg);
+  }
+}

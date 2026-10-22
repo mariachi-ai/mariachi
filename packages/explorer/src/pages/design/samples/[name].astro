@@ -1,0 +1,36 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { href } from '../../../lib/url';
+import { loadDesign } from '../../../loaders/design';
+import { samples } from '../../../samples';
+
+export function getStaticPaths() {
+  return samples.map((s) => ({ params: { name: s.name } }));
+}
+
+const sample = samples.find((s) => s.name === Astro.params.name)!;
+const presets = loadDesign().presets;
+---
+
+<Base title={`${sample.title} sample`} description={sample.description} wide>
+  <nav class="m-breadcrumb" aria-label="Breadcrumb">
+    <ol>
+      <li><a href={href('design')}>Design</a></li>
+      <li><a href={href('design/samples')}>Sample pages</a></li>
+      <li aria-current="page">{sample.title}</li>
+    </ol>
+  </nav>
+  <header class="x-page-header">
+    <h1>{sample.title}</h1>
+    <p class="x-lede">{sample.description}</p>
+  </header>
+  <div class="m-cluster x-sample-bar" data-justify="between">
+    <span class="m-muted">Compare this page:</span>
+    <div class="m-cluster" data-gap="2">
+      {presets.map((p) => <a class="m-button" data-size="sm" href={`${href('design/compare')}?item=sample:${sample.name}&presets=minimal,${p.name === 'minimal' ? 'brutalist' : p.name}`}>vs {p.label}</a>)}
+    </div>
+  </div>
+  <div class="x-sample-stage" data-pagefind-ignore>
+    <Fragment set:html={sample.html} />
+  </div>
+</Base>

@@ -1,0 +1,84 @@
+@layer mariachi.components {
+  .m-composer {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--m-composer-gap);
+    padding: var(--m-composer-padding);
+    overflow: hidden;
+    border: var(--m-composer-border-width) solid var(--m-composer-border);
+    border-radius: var(--m-composer-radius);
+    background: var(--m-composer-bg);
+    color: var(--m-composer-fg);
+    box-shadow: var(--m-composer-shadow);
+    transition: border-color var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-composer:has(.m-composer-input:focus-visible) {
+    border-color: var(--m-composer-focus-border);
+    outline: var(--m-focus-width) var(--m-focus-style) var(--m-focus-color);
+    outline-offset: calc(var(--m-focus-width) * -1 + var(--m-composer-border-width) * -1);
+  }
+
+  .m-composer-input {
+    display: block;
+    inline-size: 100%;
+    min-block-size: var(--m-composer-min-height);
+    max-block-size: var(--m-composer-max-height);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-size: var(--m-composer-font-size);
+    line-height: var(--m-font-leading-normal);
+    resize: none;
+    field-sizing: content;
+  }
+
+  .m-composer-input:focus-visible {
+    outline: none;
+  }
+
+  .m-composer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--m-space-2);
+  }
+
+  .m-composer-spacer {
+    flex: 1;
+  }
+
+  .m-composer-model {
+    max-inline-size: 14rem;
+    padding: var(--m-space-1) var(--m-space-2);
+    border: 0;
+    border-radius: var(--m-radius-control);
+    background: none;
+    color: var(--m-composer-model-fg);
+    font-size: var(--m-font-size-sm);
+    cursor: pointer;
+  }
+
+  .m-composer-model:hover {
+    color: var(--m-composer-fg);
+  }
+
+  .m-composer:has(.m-composer-input:disabled) {
+    opacity: var(--m-composer-disabled-opacity);
+    cursor: not-allowed;
+  }
+
+  /* Streaming: a line sweeps along the top edge. */
+  .m-composer[data-state="streaming"]::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    block-size: var(--m-border-width-thick);
+    background-image: linear-gradient(90deg, transparent 0 30%, var(--m-composer-streaming-color) 50%, transparent 70% 100%);
+    background-size: 200% 100%;
+    animation: m-shimmer var(--m-composer-streaming-duration) linear infinite;
+  }
+}

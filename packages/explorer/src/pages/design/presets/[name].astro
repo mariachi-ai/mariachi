@@ -1,0 +1,205 @@
+---
+import TableWrap from '../../../components/TableWrap.astro';
+import Code from '../../../components/Code.astro';
+import type { Heading } from '../../../data/schema';
+import Base from '../../../layouts/Base.astro';
+import { designSidebar } from '../../../lib/sidebars';
+import { href } from '../../../lib/url';
+import { loadDesign, loadPresetChecks } from '../../../loaders/design';
+
+export function getStaticPaths() {
+  return loadDesign().presets.map((p) => ({ params: { name: p.name } }));
+}
+
+const catalog = loadDesign();
+const preset = catalog.presets.find((p) => p.name === Astro.params.name)!;
+const check = (await loadPresetChecks())[preset.name];
+const colorGroups = [...new Set(catalog.semantic.filter((t) => t.kind === 'color').map((t) => t.path.split('.').slice(0, 2).join('.')))];
+const colorTokens = (group: string) => catalog.semantic.filter((t) => t.kind === 'color' && t.path.startsWith(`${group}.`));
+const sizes = catalog.semantic.filter((t) => t.path.startsWith('font.size.'));
+const spaces = catalog.semantic.filter((t) => /^space\.\d+$/.test(t.path) && t.path !== 'space.0');
+const radii = catalog.semantic.filter((t) => t.path.startsWith('radius.'));
+const shadows = catalog.semantic.filter((t) => t.path.startsWith('shadow.'));
+const motion = catalog.semantic.filter((t) => t.path.startsWith('motion.'));
+const componentOverrides = Object.keys(preset.tokens).filter((p) => p.startsWith('components.'));
+const passed = check.results.filter((r) => r.ratio >= r.min).length;
+const toc: Heading[] = [
+  { depth: 2, id: 'colors', text: 'Colours' },
+  { depth: 2, id: 'contrast', text: 'Contrast' },
+  { depth: 2, id: 'type', text: 'Type' },
+  { depth: 2, id: 'space', text: 'Space, radius and shadow' },
+  { depth: 2, id: 'motion', text: 'Motion' },
+  { depth: 2, id: 'overrides', text: 'Component overrides' },
+  { depth: 2, id: 'use', text: 'Use it' },
+];
+const link = `<link rel="stylesheet" href="@mariachi/design/mariachi.css">\n<link rel="stylesheet" href="@mariachi/design/themes/${preset.name}.css">\n<html data-theme="${preset.name}" data-mode="auto">`;
+const extend = `import { extendTheme, ${preset.name} } from '@mariachi/design';\n\nexport const acme = extendTheme(${preset.name}, {\n  name: 'acme',\n  tokens: { color: { accent: { default: 'oklch(0.55 0.2 30)' } } },\n});`;
+---
+
+<Base title={`${preset.label} preset`} description={preset.description} sidebar={designSidebar(catalog)} toc={toc}>
+  <nav class="m-breadcrumb" aria-label="Breadcrumb">
+    <ol>
+      <li><a href={href('design')}>Design</a></li>
+      <li aria-current="page">{preset.label}</li>
+    </ol>
+  </nav>
+  <header class="x-page-header">
+    <h1>{preset.label}</h1>
+    <p class="x-lede">{preset.description}</p>
+    <div class="x-meta">
+      <span>{passed}/{check.results.length} contrast checks pass</span>
+      {preset.extends && <span>Extends {preset.extends}</span>}
+      <a href={href(`design/tokens/${preset.name}.json`)}>DTCG tokens (JSON)</a>
+      <a href={`${href('design/compare')}?presets=${preset.name},minimal`}>Compare</a>
+    </div>
+  </header>
+
+  <section class="x-section" id="colors">
+    <h2>Colours</h2>
+    <div class="x-mode-pair" data-pagefind-ignore>
+      {
+        (['light', 'dark'] as const).map((mode) => (
+          <div class="x-preset-frame" data-theme={preset.name} data-mode={mode}>
+            <strong>{mode === 'light' ? 'Light' : 'Dark'}</strong>
+            {colorGroups.map((group) => (
+              <div class="m-stack" data-gap="2">
+                <span class="m-muted x-mono">{group}</span>
+                <div class="x-swatches">
+                  {colorTokens(group).map((t) => (
+                    <div class="x-swatch" title={t.description}>
+                      <div class="x-swatch-chip" style={`background: var(${t.cssVar})`} />
+                      <span class="x-mono">{t.path.split('.').slice(2).join('.')}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="x-section" id="contrast">
+    <h2>Contrast</h2>
+    <p class="m-muted">Every pair in the contract, in both modes. Text needs 4.5:1 (WCAG 1.4.3); borders and focus rings need 3:1 (WCAG 1.4.11).</p>
+    <details class="x-members">
+      <summary>{check.results.length} pairs, {check.failures.length} failing</summary>
+      <TableWrap label="Contrast pairs">
+        <table class="m-table" data-density="compact">
+          <thead><tr><th>Foreground</th><th>Background</th><th>Mode</th><th>Ratio</th><th>Needs</th></tr></thead>
+          <tbody>
+            {
+              check.results.map((r) => (
+                <tr>
+                  <td class="x-mono">{r.fg}</td>
+                  <td class="x-mono">{r.bg}</td>
+                  <td>{r.mode}</td>
+                  <td><span class="m-badge" data-tone={r.ratio >= r.min ? 'success' : 'danger'}>{r.ratio.toFixed(2)}:1</span></td>
+                  <td>{r.min}:1</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </TableWrap>
+    </details>
+  </section>
+
+  <section class="x-section" id="type">
+    <h2>Type</h2>
+    <div class="x-preset-frame" data-theme={preset.name} data-pagefind-ignore>
+      <h1>Heading one</h1>
+      <h2>Heading two</h2>
+      <h3>Heading three</h3>
+      {
+        sizes.map((t) => (
+          <div class="m-cluster" data-gap="4" data-align="baseline">
+            <span class="m-subtle x-mono x-scale-label">{t.path.split('.').pop()}</span>
+            <span style={`font-size: var(${t.cssVar})`}>The quick brown fox, 0123456789</span>
+          </div>
+        ))
+      }
+      <code class="m-code-inline">const mono = "font.family.mono";</code>
+    </div>
+  </section>
+
+  <section class="x-section" id="space">
+    <h2>Space, radius and shadow</h2>
+    <div class="x-preset-frame" data-theme={preset.name} data-pagefind-ignore>
+      <div class="m-stack" data-gap="2">
+        {
+          spaces.map((t) => (
+            <div class="m-cluster" data-gap="4">
+              <span class="m-subtle x-mono x-scale-label">{t.path}</span>
+              <span class="x-space-bar" style={`inline-size: var(${t.cssVar})`} />
+            </div>
+          ))
+        }
+      </div>
+      <div class="m-cluster" data-gap="4">
+        {radii.map((t) => (
+          <div class="x-swatch">
+            <div class="x-radius-box" style={`border-radius: var(${t.cssVar})`} />
+            <span class="x-mono">{t.path.split('.').pop()}</span>
+          </div>
+        ))}
+      </div>
+      <div class="m-cluster" data-gap="6">
+        {shadows.map((t) => (
+          <div class="x-swatch">
+            <div class="x-shadow-box" style={`box-shadow: var(${t.cssVar})`} />
+            <span class="x-mono">{t.path.split('.').pop()}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="x-section" id="motion">
+    <h2>Motion</h2>
+    <TableWrap label="Motion tokens">
+      <table class="m-table" data-density="compact">
+        <thead><tr><th>Token</th><th>Value</th></tr></thead>
+        <tbody>
+          {motion.map((t) => (
+            <tr><td class="x-mono">{t.cssVar}</td><td class="x-mono">{String(preset.tokens[t.path] ?? t.default ?? '')}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </TableWrap>
+    <p class="m-muted">Every duration collapses to 0ms under prefers-reduced-motion.</p>
+  </section>
+
+  <section class="x-section" id="overrides">
+    <h2>Component overrides</h2>
+    {
+      componentOverrides.length ? (
+        <TableWrap label="Component overrides">
+          <table class="m-table" data-density="compact">
+            <thead><tr><th>Token</th><th>Value</th></tr></thead>
+            <tbody>
+              {componentOverrides.map((p) => {
+                const v = preset.tokens[p];
+                return (
+                  <tr>
+                    <td class="x-mono">{catalog.components.flatMap((c) => c.tokens).find((t) => t.path === p)?.cssVar ?? p}</td>
+                    <td class="x-mono">{typeof v === 'string' ? v : `${v.light} / ${v.dark}`}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </TableWrap>
+      ) : (
+        <p class="m-muted">None: every component uses its semantic defaults.</p>
+      )
+    }
+  </section>
+
+  <section class="x-section" id="use">
+    <h2>Use it</h2>
+    <Code code={link} lang="html" label="HTML" />
+    <Code code={extend} lang="ts" label="Build your own on top of it" />
+  </section>
+</Base>

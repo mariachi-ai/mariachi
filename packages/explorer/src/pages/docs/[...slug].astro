@@ -1,0 +1,40 @@
+---
+import Base from '../../layouts/Base.astro';
+import { docsSidebar } from '../../lib/sidebars';
+import { href } from '../../lib/url';
+import { loadDocs } from '../../loaders/docs';
+
+export async function getStaticPaths() {
+  return (await loadDocs()).filter((d) => d.slug !== '').map((d) => ({ params: { slug: d.slug } }));
+}
+
+const docs = await loadDocs();
+const doc = docs.find((d) => d.slug === Astro.params.slug)!;
+const sameSection = docs.filter((d) => d.section === doc.section);
+const i = sameSection.indexOf(doc);
+const prev = sameSection[i - 1];
+const next = sameSection[i + 1];
+const sectionLabel = { start: 'Start here', guide: 'Guide', recipe: 'Recipe', adr: 'Decision record', project: 'Project' }[doc.section];
+---
+
+<Base title={doc.title} description={doc.summary} sidebar={docsSidebar(docs)} toc={doc.headings}>
+  <nav class="m-breadcrumb" aria-label="Breadcrumb">
+    <ol>
+      <li><a href={href('docs')}>Docs</a></li>
+      <li aria-current="page">{sectionLabel}</li>
+    </ol>
+  </nav>
+  <header class="x-page-header">
+    <h1>{doc.title}</h1>
+  </header>
+  <article class="m-prose">
+    <Fragment set:html={doc.html} />
+  </article>
+  <nav class="x-pager m-cluster" data-justify="between" aria-label="More in this section">
+    {prev ? <a class="m-button" href={href(prev.slug ? `docs/${prev.slug}` : 'docs')}>← {prev.title}</a> : <span />}
+    {next && <a class="m-button" href={href(`docs/${next.slug}`)}>{next.title} →</a>}
+  </nav>
+  <p class="m-muted x-source-note">
+    Source: <a href={`https://github.com/mariachi-ai/mariachi/blob/main/${doc.file}`}>{doc.file}</a>
+  </p>
+</Base>

@@ -1,0 +1,30 @@
+@layer mariachi.components {
+  .m-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: var(--m-kbd-height);
+    block-size: var(--m-kbd-height);
+    padding-inline: var(--m-kbd-padding-x);
+    border: var(--m-kbd-border-width) solid var(--m-kbd-border);
+    border-radius: var(--m-kbd-radius);
+    background: var(--m-kbd-bg);
+    color: var(--m-kbd-fg);
+    box-shadow: var(--m-kbd-shadow);
+    font-family: var(--m-kbd-font-family);
+    font-size: var(--m-kbd-font-size);
+    font-weight: var(--m-kbd-font-weight);
+    line-height: 1;
+    white-space: nowrap;
+    vertical-align: baseline;
+  }
+
+  .m-kbd > .m-kbd {
+    block-size: auto;
+    min-inline-size: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+}

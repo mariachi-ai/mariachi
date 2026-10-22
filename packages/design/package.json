@@ -1,0 +1,88 @@
+{
+  "name": "@mariachi/design",
+  "version": "0.0.5",
+  "description": "Framework-agnostic design library: one token contract, interchangeable presets, component CSS, and overrides at any granularity.",
+  "mariachi": {
+    "category": "design",
+    "status": "alpha",
+    "useWhen": "Styling any web app consistently, picking a preset, or overriding one token or component",
+    "entry": [
+      "defineTheme",
+      "extendTheme",
+      "defineDesign",
+      "presets",
+      "buildDesign",
+      "checkTheme"
+    ]
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./build": {
+      "types": "./dist/build.d.ts",
+      "import": "./dist/build.js",
+      "require": "./dist/build.cjs"
+    },
+    "./mariachi.css": "./dist/css/mariachi.css",
+    "./mariachi.min.css": "./dist/css/mariachi.min.css",
+    "./base.css": "./dist/css/base.css",
+    "./components.css": "./dist/css/components.css",
+    "./components/*.css": "./dist/css/components/*.css",
+    "./themes/*.css": "./dist/css/themes/*.css",
+    "./tokens/*.json": "./dist/tokens/*.json",
+    "./tailwind.css": "./dist/css/tailwind.css",
+    "./catalog.json": "./dist/catalog.json",
+    "./behaviors": {
+      "types": "./dist/behaviors.d.ts",
+      "import": "./dist/behaviors.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rm -rf dist && node scripts/generate-registry.mjs && tsup && node scripts/build-assets.mjs",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo",
+    "lint": "node scripts/generate-registry.mjs --check && biome lint src && stylelint \"src/**/*.css\"",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@mariachi/core": "workspace:*",
+    "zod": "^3.25.76"
+  },
+  "peerDependencies": {
+    "lightningcss": "^1.33.0"
+  },
+  "peerDependenciesMeta": {
+    "lightningcss": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "lightningcss": "^1.33.0",
+    "stylelint": "^17.16.0",
+    "stylelint-config-standard": "^40.0.0",
+    "tsup": "^8",
+    "typescript": "^5.7",
+    "vitest": "^3"
+  }
+}

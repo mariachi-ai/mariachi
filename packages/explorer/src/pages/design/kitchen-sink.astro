@@ -1,0 +1,30 @@
+---
+import Base from '../../layouts/Base.astro';
+import { namespaceHtml } from '../../lib/examples';
+import { loadDesign } from '../../loaders/design';
+
+const catalog = loadDesign();
+---
+
+<Base title="Kitchen sink" description="Every example of every component on one page (used by visual and accessibility tests)." wide noindex>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Design</span>
+    <h1>Kitchen sink</h1>
+    <p class="x-lede">Every example of every component, in the preset picked in the header.</p>
+  </header>
+  <div class="m-stack" data-gap="10">
+    {
+      catalog.components.map((c) => (
+        <section class="m-stack" data-gap="4" data-component={c.name}>
+          <h2>{c.title}</h2>
+          {c.examples.map((e) => (
+            <div class="m-stack" data-gap="2">
+              <span class="m-subtle x-mono">{e.name}</span>
+              <Fragment set:html={namespaceHtml(e.html)} />
+            </div>
+          ))}
+        </section>
+      ))
+    }
+  </div>
+</Base>

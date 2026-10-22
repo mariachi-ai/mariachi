@@ -68,6 +68,19 @@ Each package's status is listed in the [catalog](packages/core/docs/packages.md)
 - Search on Typesense with typed fields, alias reindexing and quoted filters; rate limiting with three algorithms and per-tenant tiers; an integrations registry that can call functions, with per-tenant credentials.
 - `@mariachi/testing` doubles kept honest by contract suites that also run against the real adapters.
 
+**Design and explorer.**
+- `@mariachi/design` (alpha): a token contract (semantic and component tiers, Zod-validated), six presets
+  (minimal, brutalist, editorial, soft, enterprise, terminal) and 36 components as plain HTML + CSS,
+  including AI patterns (chat, thinking, tool calls, citations, composer, usage).
+- Overrides at any granularity: one token, one component, one area, a replaced component, or a preset
+  (`extendTheme`), through CSS or `mariachi.design.ts` + `mariachi design build|check|new-theme`.
+- Every preset passes WCAG contrast pairs in both modes; component defaults resolve on the component so
+  scoped overrides work; DTCG and Tailwind v4 exports; an optional behaviours script.
+- `@mariachi/explorer` (alpha): packages, docs, API (from built declarations), error codes (AST scan),
+  CLI, tables, dependency graph and the design library in one searchable site, generated at build
+  time. `mariachi explore` serves it; CI publishes it to GitHub Pages and runs axe, behaviour and
+  visual-regression tests on it.
+
 **CLI and docs.**
 - `mariachi init` generates a working project, and `mariachi generate entity|service|controller|job|integration` fills it in.
 - `mariachi validate` checks architecture rules.
@@ -86,6 +99,9 @@ Each package's status is listed in the [catalog](packages/core/docs/packages.md)
 - **Promotion to stable.** A package becomes stable when it has contract tests, a README with a status,
   public API and config, `Disposable` and health wiring, and no open breaking changes.
 
+- **Design library to beta.** Contract stability across a release, framework adoption in the reference
+  app, and a few real apps' overrides fed back into the component tokens.
+
 ## Ideas, not scheduled
 
 None of these exist in code. Don't generate code that uses them.
@@ -94,3 +110,6 @@ None of these exist in code. Don't generate code that uses them.
   exists, but the procedure contracts are designed so a transport can be swapped in later.
 - Database adapters other than Postgres (MySQL, SQLite).
 - GraphQL facade.
+- Explorer "project mode": `mariachi explore` inside an app also showing its procedures, routes,
+  jobs, events and tables.
+- Framework wrappers (React, Vue) over the design library's markup.

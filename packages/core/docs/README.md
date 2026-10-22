@@ -1,8 +1,8 @@
 # Mariachi docs
 
 Mariachi is an opinionated TypeScript backend framework: a modular monolith of `@mariachi/*` packages
-behind adapters chosen by config. The opinions exist so that people and coding agents write the same
-code the same way.
+behind adapters chosen by config, plus a framework-agnostic design library and an explorer for all of
+it. The opinions exist so that people and coding agents write the same code the same way.
 
 These docs ship inside `@mariachi/core` (`node_modules/@mariachi/core/docs/`) and are the single
 source of truth. Files elsewhere (`CLAUDE.md`, `.cursor/rules`, a generated project's `AGENTS.md`)
@@ -17,7 +17,7 @@ only point here.
 
 ## Guides
 
-- [cli.md](./cli.md): `mariachi init`, `generate`, `validate`, `db`
+- [cli.md](./cli.md): `mariachi init`, `generate`, `validate`, `db`, `design`, `explore`
 - [http.md](./http.md): `server` vs `api-facade` vs `webhooks`, routes, auth strategies, rate limits, OpenAPI
 - [events.md](./events.md): envelopes, consumer groups, delivery guarantees, dead letters, outbox
 - [jobs.md](./jobs.md): `defineJob`, retries, dedup, scheduling, hooks, dead-letter queue
@@ -31,6 +31,9 @@ only point here.
 - [storage.md](./storage.md), [search.md](./search.md), [integrations.md](./integrations.md)
 - [testing.md](./testing.md): doubles, contract suites, integration tests
 - [runbook.md](./runbook.md)
+- [design.md](./design.md): the design library: presets, markup contract, overriding at any granularity, tokens
+- [design-catalog.md](./design-catalog.md): generated list of every component and preset
+- [explorer.md](./explorer.md): browse every package, doc, API, error code and component; how it's built
 - [ai-guide.md](./ai-guide.md): decision trees and gotchas for coding agents
 
 ## Recipes
@@ -40,6 +43,8 @@ only point here.
 - [add-webhook-endpoint.md](./recipes/add-webhook-endpoint.md)
 - [add-integration.md](./recipes/add-integration.md)
 - [wiring-and-bootstrap.md](./recipes/wiring-and-bootstrap.md): the composition root, step by step
+- [add-design-component.md](./recipes/add-design-component.md)
+- [add-design-preset.md](./recipes/add-design-preset.md)
 
 ## Decisions
 

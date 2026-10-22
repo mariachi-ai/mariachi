@@ -1,0 +1,65 @@
+import { defineComponent } from '../../contract/component';
+import { ref, t } from '../../contract/tokens';
+
+const syntax = ['keyword', 'string', 'stringExpression', 'comment', 'function', 'constant', 'parameter', 'punctuation', 'link'] as const;
+
+export const code = defineComponent({
+  name: 'code',
+  title: 'Code',
+  category: 'content',
+  description:
+    'Code blocks and inline code. Blocks define the Shiki css-variables theme, so highlighted code takes its colours from the active preset.',
+  useWhen: 'Showing source, commands, JSON payloads or tool arguments. Highlight with Shiki using its css-variables theme.',
+  anatomy: {
+    'pre.m-code': 'A code block (wrap content in <code>)',
+    '.m-code-frame': 'Optional wrapper that joins a header to the block',
+    '.m-code-header': 'Header row inside the frame: language label and actions',
+    '.m-code-lang': 'Language or file name in the header',
+    'code.m-code-inline': 'Inline code in running text',
+    '.m-prose pre / .m-prose code': 'Markdown inside .m-prose gets the same styles without classes',
+  },
+  tokens: {
+    bg: t.color('Block background', ref('color.bg.sunken')),
+    fg: t.color('Block text', ref('color.fg.default')),
+    border: t.color('Block border', ref('color.border.default')),
+    borderWidth: t.length('Block border width', ref('borderWidth.thin')),
+    radius: t.length('Block radius', ref('radius.md')),
+    padding: t.length('Block padding', ref('space.4')),
+    fontSize: t.length('Block font size', ref('font.size.sm')),
+    lineHeight: t.number('Block line height', '1.6'),
+    tabSize: t.number('Tab width in spaces', '2'),
+    headerBg: t.color('Header background', ref('color.bg.surface')),
+    headerFg: t.color('Header text', ref('color.fg.muted')),
+    headerHeight: t.length('Header height', ref('control.height.md')),
+    headerFontSize: t.length('Header text size', ref('font.size.xs')),
+    headerTransform: t.keyword('Header text-transform', 'none'),
+    inlineBg: t.color('Inline code background', ref('color.bg.sunken')),
+    inlineFg: t.color('Inline code text', ref('color.fg.default')),
+    inlineBorder: t.color('Inline code border', ref('color.border.muted')),
+    inlineRadius: t.length('Inline code radius', ref('radius.sm')),
+    inlinePaddingX: t.length('Inline code horizontal padding', '0.35em'),
+    inlineFontSize: t.length('Inline code size relative to the text', '0.875em'),
+    keyword: t.color('Keywords (const, return, if)', ref('color.accent.text')),
+    string: t.color('Strings', ref('color.success.fg')),
+    stringExpression: t.color('Template-literal expressions and regexes', ref('color.success.fg')),
+    comment: t.color('Comments', ref('color.fg.subtle')),
+    function: t.color('Function and method names', ref('color.info.fg')),
+    constant: t.color('Numbers, booleans, constants', ref('color.warning.fg')),
+    parameter: t.color('Parameters and properties', ref('color.fg.default')),
+    punctuation: t.color('Punctuation and operators', ref('color.fg.muted')),
+    link: t.color('Links inside code', ref('color.accent.text')),
+  },
+  contrast: [
+    { fg: 'fg', bg: 'bg', min: 4.5 },
+    { fg: 'headerFg', bg: 'headerBg', min: 4.5 },
+    { fg: 'inlineFg', bg: 'inlineBg', min: 4.5 },
+    ...syntax.map((s) => ({ fg: s, bg: 'bg', min: 4.5 })),
+  ],
+  a11y: [
+    'Wrap block content in <pre><code>; screen readers read it verbatim.',
+    'Long lines scroll horizontally inside the block; make the block focusable (tabindex="0") so keyboard users can scroll it.',
+    'Give copy buttons an accessible name that includes what is copied ("Copy install command") and announce success with a live region.',
+    'Syntax colours meet 4.5:1 against the block background in every preset; colour is never the only signal.',
+  ],
+  requires: ['button'],
+});

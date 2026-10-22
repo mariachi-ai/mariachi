@@ -1,0 +1,136 @@
+---
+import Code from '../components/Code.astro';
+import StatusBadge from '../components/StatusBadge.astro';
+import Base from '../layouts/Base.astro';
+import { href } from '../lib/url';
+import { loadApi } from '../loaders/api';
+import { loadDesign } from '../loaders/design';
+import { loadDocs } from '../loaders/docs';
+import { loadErrors } from '../loaders/errors';
+import { loadCategories, loadPackages } from '../loaders/packages';
+
+const [packages, categories, docs, api, { errors }] = await Promise.all([loadPackages(), loadCategories(), loadDocs(), loadApi(), loadErrors()]);
+const design = loadDesign();
+const overview = docs.find((d) => d.slug === '')!;
+const architecture = docs.find((d) => d.slug === 'architecture');
+const diagram = architecture?.html.match(/<pre class="mermaid">[\s\S]*?<\/pre>/)?.[0];
+const symbols = api.reduce((n, p) => n + p.entries.reduce((m, e) => m + e.symbols.length, 0), 0);
+const codes = new Set(errors.map((e) => e.code)).size;
+const beta = packages.filter((p) => p.status === 'beta').length;
+const stats = [
+  { value: packages.length, label: 'packages', detail: `${beta} beta, ${packages.length - beta} alpha`, route: 'packages' },
+  { value: symbols, label: 'exported symbols', detail: 'from the built declarations', route: 'api' },
+  { value: codes, label: 'error codes', detail: 'with HTTP status', route: 'reference/errors' },
+  { value: design.components.length, label: 'components', detail: `${design.presets.length} presets`, route: 'design' },
+];
+const start = docs.filter((d) => d.section === 'start' && d.slug !== '');
+const sample = `<div class="m-stack" data-gap="3">
+  <div class="m-cluster" data-gap="2"><button class="m-button" data-variant="primary" data-size="sm">Deploy</button><button class="m-button" data-size="sm">Cancel</button><span class="m-badge" data-tone="success">Healthy</span></div>
+  <input class="m-input" data-size="sm" placeholder="Search sessions" aria-label="Search sessions" />
+</div>`;
+---
+
+<Base title="Mariachi Explorer" wide>
+  <header class="x-page-header x-hero">
+    <span class="x-eyebrow">Mariachi Explorer</span>
+    <h1>Everything in the framework, in one place.</h1>
+    <p class="x-lede">{overview.summary}</p>
+    <div class="m-cluster">
+      <a class="m-button" data-variant="primary" href={href('packages')}>Browse packages</a>
+      <a class="m-button" href={href('docs')}>Read the docs</a>
+      <a class="m-button" data-variant="ghost" href={href('design')}>Design library</a>
+    </div>
+  </header>
+
+  <section class="m-grid x-stats" style="--m-layout-grid-min: 12rem" aria-label="At a glance">
+    {
+      stats.map((s) => (
+        <a class="m-card x-card-link" data-interactive href={href(s.route)}>
+          <div class="m-card-body">
+            <div class="x-stat-value">{s.value}</div>
+            <div class="m-card-title">{s.label}</div>
+            <div class="m-card-description">{s.detail}</div>
+          </div>
+        </a>
+      ))
+    }
+  </section>
+
+  <section class="x-section">
+    <h2>Quick start</h2>
+    <Code code={'npx @mariachi/cli init my-app\ncd my-app && pnpm install\npnpm dev'} lang="bash" label="terminal" />
+  </section>
+
+  {
+    diagram && (
+      <section class="x-section">
+        <h2>How a request flows</h2>
+        <Fragment set:html={diagram} />
+        <p class="m-muted">
+          From <a href={href('docs/architecture')}>Architecture</a>. Controllers reach services only through <code class="m-code-inline">communication.call()</code>.
+        </p>
+      </section>
+    )
+  }
+
+  <section class="x-section">
+    <h2>Read first</h2>
+    <div class="m-grid" style="--m-layout-grid-min: 16rem">
+      {
+        start.map((d) => (
+          <a class="m-card x-card-link" data-interactive href={href(`docs/${d.slug}`)}>
+            <div class="m-card-header">
+              <div class="m-card-title">{d.title}</div>
+            </div>
+            <div class="m-card-body m-muted">{d.summary.slice(0, 160)}{d.summary.length > 160 ? '…' : ''}</div>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="x-section">
+    <h2>Packages by area</h2>
+    <div class="m-grid" style="--m-layout-grid-min: 18rem">
+      {
+        Object.entries(categories).map(([key, title]) => {
+          const group = packages.filter((p) => p.category === key);
+          return (
+            group.length > 0 && (
+              <div class="m-card" data-variant="outline">
+                <div class="m-card-header">
+                  <div class="m-card-title">{title}</div>
+                  <div class="m-card-description">{group.length} package{group.length === 1 ? '' : 's'}</div>
+                </div>
+                <div class="m-card-body">
+                  <ul class="x-plain-list">
+                    {group.map((p) => (
+                      <li>
+                        <a href={href(`packages/${p.slug}`)} class="x-mono">{p.name.replace('@mariachi/', '')}</a> {p.status === 'alpha' && <StatusBadge status="alpha" />}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )
+          );
+        })
+      }
+    </div>
+  </section>
+
+  <section class="x-section">
+    <h2>One markup, {design.presets.length} presets</h2>
+    <p class="m-muted">The same HTML in every preset. The explorer itself follows the preset picker in the header.</p>
+    <div class="m-grid" style="--m-layout-grid-min: 16rem" data-pagefind-ignore>
+      {
+        design.presets.map((p) => (
+          <div class="x-preset-frame x-has-stretched" data-theme={p.name}>
+            <a class="x-stretched x-preset-name" href={href(`design/presets/${p.name}`)}>{p.label}</a>
+            <div inert aria-hidden="true"><Fragment set:html={sample} /></div>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+</Base>

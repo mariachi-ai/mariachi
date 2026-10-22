@@ -1,0 +1,71 @@
+---
+import StatusBadge from '../../components/StatusBadge.astro';
+import Base from '../../layouts/Base.astro';
+import { packagesSidebar } from '../../lib/sidebars';
+import { href } from '../../lib/url';
+import { loadCategories, loadPackages } from '../../loaders/packages';
+
+const [packages, categories] = await Promise.all([loadPackages(), loadCategories()]);
+---
+
+<Base title="Packages" description="Every @mariachi package with its status, purpose and entry points." sidebar={packagesSidebar(packages, categories)}>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Packages</span>
+    <h1>{packages.length} packages</h1>
+    <p class="x-lede">
+      Every package shares one version and is released together. <strong>beta</strong> means hardened and covered by unit and integration tests;
+      <strong>alpha</strong> means it works but hardening is in progress.
+    </p>
+    <div class="x-filter" data-x-filter="packages">
+      <label class="m-sr-only" for="pkg-filter">Filter packages</label>
+      <input class="m-input" id="pkg-filter" type="search" placeholder="Filter by name, purpose or entry point" />
+      <div class="m-cluster" data-gap="2" role="group" aria-label="Status">
+        <button type="button" class="m-button" data-size="sm" data-x-status="all" aria-pressed="true">All</button>
+        <button type="button" class="m-button" data-size="sm" data-x-status="beta" aria-pressed="false">Beta</button>
+        <button type="button" class="m-button" data-size="sm" data-x-status="alpha" aria-pressed="false">Alpha</button>
+      </div>
+    </div>
+  </header>
+
+  {
+    Object.entries(categories).map(([key, title]) => {
+      const group = packages.filter((p) => p.category === key);
+      return (
+        group.length > 0 && (
+          <section class="x-section" data-x-group>
+            <h2 id={key}>{title}</h2>
+            <div class="m-grid" style="--m-layout-grid-min: 20rem">
+              {group.map((p) => (
+                <a
+                  class="m-card x-card-link"
+                  data-interactive
+                  href={href(`packages/${p.slug}`)}
+                  data-x-item
+                  data-x-status-value={p.status}
+                  data-x-text={`${p.name} ${p.description} ${p.useWhen} ${p.entry.join(' ')}`.toLowerCase()}
+                >
+                  <div class="m-card-header">
+                    <div class="m-card-title x-mono">{p.name}</div>
+                    <StatusBadge status={p.status} />
+                  </div>
+                  <div class="m-card-body m-stack" data-gap="2">
+                    <span>{p.description}</span>
+                    <span class="m-muted">
+                      <strong>Use it when:</strong> {p.useWhen}
+                    </span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+        )
+      );
+    })
+  }
+  <p class="m-muted" data-x-empty hidden>No packages match.</p>
+
+  <script>
+    import { bindFilter } from '../../islands/filter';
+    bindFilter('packages');
+  </script>
+</Base>

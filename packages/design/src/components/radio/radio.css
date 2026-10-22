@@ -1,0 +1,54 @@
+@layer mariachi.components {
+  .m-radio {
+    --_bg: var(--m-radio-bg);
+    --_border: var(--m-radio-border);
+
+    display: inline-grid;
+    place-content: center;
+    flex-shrink: 0;
+    inline-size: var(--m-radio-size);
+    block-size: var(--m-radio-size);
+    margin: 0;
+    border: var(--m-radio-border-width) solid var(--_border);
+    border-radius: var(--m-radius-full);
+    background: var(--_bg);
+    vertical-align: middle;
+    appearance: none;
+    cursor: pointer;
+    transition:
+      background-color var(--m-motion-duration-fast) var(--m-motion-easing-standard),
+      border-color var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-radio::before {
+    content: "";
+    inline-size: calc(var(--m-radio-size) * 0.4);
+    block-size: calc(var(--m-radio-size) * 0.4);
+    border-radius: var(--m-radius-full);
+    background: var(--m-radio-dot);
+    transform: scale(0);
+    transition: transform var(--m-motion-duration-fast) var(--m-motion-easing-emphasized);
+  }
+
+  .m-radio:checked {
+    --_bg: var(--m-radio-checked-bg);
+    --_border: var(--m-radio-checked-border);
+  }
+
+  .m-radio:checked::before {
+    transform: scale(1);
+  }
+
+  .m-radio:hover:not(:disabled, :checked) {
+    border-color: var(--m-radio-hover-border);
+  }
+
+  .m-radio[aria-invalid="true"]:not(:checked) {
+    border-color: var(--m-radio-invalid-border);
+  }
+
+  .m-radio:disabled {
+    opacity: var(--m-radio-disabled-opacity);
+    cursor: not-allowed;
+  }
+}

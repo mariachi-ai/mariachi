@@ -1,0 +1,64 @@
+@layer mariachi.components {
+  .m-thinking {
+    color: var(--m-thinking-fg);
+    font-size: var(--m-thinking-font-size);
+  }
+
+  .m-thinking > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--m-space-2);
+    padding: var(--m-space-1) var(--m-space-2);
+    margin-inline-start: calc(var(--m-space-2) * -1);
+    border-radius: var(--m-thinking-radius);
+    color: var(--m-thinking-summary-fg);
+    font-weight: var(--m-thinking-summary-weight);
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .m-thinking > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .m-thinking > summary:hover {
+    background: var(--m-thinking-hover-bg);
+  }
+
+  /* Chevron */
+  .m-thinking > summary::before {
+    content: "";
+    inline-size: 0.4em;
+    block-size: 0.4em;
+    border-block-end: var(--m-border-width-thin) solid currentcolor;
+    border-inline-end: var(--m-border-width-thin) solid currentcolor;
+    transform: rotate(-45deg);
+    transition: transform var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-thinking[open] > summary::before {
+    transform: rotate(45deg);
+  }
+
+  .m-thinking-duration {
+    color: var(--m-thinking-duration-fg);
+    font-weight: var(--m-font-weight-regular);
+  }
+
+  .m-thinking[data-state="running"] .m-thinking-label {
+    animation: m-pulse var(--m-thinking-pulse-duration) ease-in-out infinite;
+  }
+
+  .m-thinking-body {
+    margin-block-start: var(--m-thinking-gap);
+    padding-inline-start: var(--m-thinking-indent);
+    border-inline-start: var(--m-thinking-rule-width) solid var(--m-thinking-rule);
+    font-style: var(--m-thinking-font-style);
+    line-height: var(--m-font-leading-relaxed);
+  }
+
+  .m-thinking-body > * + * {
+    margin-block-start: var(--m-space-2);
+  }
+}

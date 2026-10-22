@@ -1,0 +1,42 @@
+@layer mariachi.components {
+  .m-breadcrumb {
+    font-size: var(--m-breadcrumb-font-size);
+  }
+
+  .m-breadcrumb ol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--m-breadcrumb-gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .m-breadcrumb li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--m-breadcrumb-gap);
+    min-inline-size: 0;
+  }
+
+  .m-breadcrumb li + li::before {
+    content: var(--m-breadcrumb-separator) / "";
+    color: var(--m-breadcrumb-separator-fg);
+  }
+
+  .m-breadcrumb a {
+    color: var(--m-breadcrumb-fg);
+    text-decoration: none;
+  }
+
+  .m-breadcrumb a:hover {
+    color: var(--m-breadcrumb-hover-fg);
+    text-decoration: underline;
+  }
+
+  .m-breadcrumb [aria-current="page"] {
+    color: var(--m-breadcrumb-current-fg);
+    font-weight: var(--m-breadcrumb-current-weight);
+  }
+}

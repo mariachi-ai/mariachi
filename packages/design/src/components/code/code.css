@@ -1,0 +1,85 @@
+@layer mariachi.components {
+  /* Blocks: .m-code, and bare <pre> inside .m-prose (rendered markdown). */
+  .m-code,
+  .m-prose pre {
+    --shiki-foreground: var(--m-code-fg);
+    --shiki-background: var(--m-code-bg);
+    --shiki-token-keyword: var(--m-code-keyword);
+    --shiki-token-string: var(--m-code-string);
+    --shiki-token-string-expression: var(--m-code-string-expression);
+    --shiki-token-comment: var(--m-code-comment);
+    --shiki-token-function: var(--m-code-function);
+    --shiki-token-constant: var(--m-code-constant);
+    --shiki-token-parameter: var(--m-code-parameter);
+    --shiki-token-punctuation: var(--m-code-punctuation);
+    --shiki-token-link: var(--m-code-link);
+
+    display: block;
+    padding: var(--m-code-padding);
+    overflow-x: auto;
+    border: var(--m-code-border-width) solid var(--m-code-border);
+    border-radius: var(--m-code-radius);
+    background: var(--m-code-bg);
+    color: var(--m-code-fg);
+    font-family: var(--m-font-family-mono);
+    font-size: var(--m-code-font-size);
+    line-height: var(--m-code-line-height);
+    tab-size: var(--m-code-tab-size);
+    white-space: pre;
+  }
+
+  :is(.m-code, .m-prose pre) code {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+  }
+
+  .m-code-frame {
+    overflow: hidden;
+    border: var(--m-code-border-width) solid var(--m-code-border);
+    border-radius: var(--m-code-radius);
+  }
+
+  .m-code-frame > .m-code {
+    border: 0;
+    border-radius: 0;
+  }
+
+  /* The frame clips overflow, so draw the block's focus ring inside it. */
+  .m-code-frame > .m-code:focus-visible {
+    outline-offset: calc(var(--m-focus-width) * -1);
+  }
+
+  .m-code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--m-space-2);
+    min-block-size: var(--m-code-header-height);
+    padding-inline: var(--m-code-padding) var(--m-space-2);
+    border-block-end: var(--m-code-border-width) solid var(--m-code-border);
+    background: var(--m-code-header-bg);
+    color: var(--m-code-header-fg);
+    font-size: var(--m-code-header-font-size);
+    text-transform: var(--m-code-header-transform);
+  }
+
+  .m-code-lang {
+    font-family: var(--m-font-family-mono);
+  }
+
+  /* Inline: .m-code-inline, and <code> outside <pre> inside .m-prose. */
+  .m-code-inline,
+  .m-prose :not(pre) > code {
+    padding: 0.1em var(--m-code-inline-padding-x);
+    border: var(--m-border-width-thin) solid var(--m-code-inline-border);
+    border-radius: var(--m-code-inline-radius);
+    background: var(--m-code-inline-bg);
+    color: var(--m-code-inline-fg);
+    font-family: var(--m-font-family-mono);
+    font-size: var(--m-code-inline-font-size);
+    overflow-wrap: anywhere;
+  }
+}

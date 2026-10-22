@@ -1,0 +1,43 @@
+---
+import TableWrap from '../components/TableWrap.astro';
+import StatusBadge from '../components/StatusBadge.astro';
+import Base from '../layouts/Base.astro';
+import { href } from '../lib/url';
+import { loadCategories, loadPackages } from '../loaders/packages';
+import { loadRoadmap } from '../loaders/status';
+
+const [roadmap, packages, categories] = await Promise.all([loadRoadmap(), loadPackages(), loadCategories()]);
+const noReadme = packages.filter((p) => !p.readme);
+---
+
+<Base title="Status" description="Roadmap and per-package status." toc={[{ depth: 2, id: 'packages', text: 'Package status' }, ...roadmap.headings]}>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Status</span>
+    <h1>{roadmap.title ?? 'Roadmap'}</h1>
+    <p class="x-lede">{roadmap.summary}</p>
+  </header>
+  <section class="x-section" id="packages">
+    <h2>Package status</h2>
+    <TableWrap label="Package status">
+      <table class="m-table" data-density="compact">
+        <thead><tr><th>Package</th><th>Category</th><th>Status</th><th>README</th></tr></thead>
+        <tbody>
+          {
+            packages.map((p) => (
+              <tr>
+                <td><a class="x-mono" href={href(`packages/${p.slug}`)}>{p.name}</a></td>
+                <td>{categories[p.category]}</td>
+                <td><StatusBadge status={p.status} /></td>
+                <td>{p.readme ? 'yes' : <span class="m-badge" data-tone="warning">missing</span>}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </TableWrap>
+    <p class="m-muted">{noReadme.length} packages have no README yet. A README with status, public API and config is one of the criteria for promotion to stable.</p>
+  </section>
+  <article class="m-prose x-section">
+    <Fragment set:html={roadmap.html} />
+  </article>
+</Base>

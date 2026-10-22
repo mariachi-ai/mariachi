@@ -1,0 +1,31 @@
+---
+import Base from '../../layouts/Base.astro';
+import { referenceSidebar } from '../../lib/sidebars';
+import { href } from '../../lib/url';
+
+const items = referenceSidebar[0].links;
+const blurbs: Record<string, string> = {
+  'reference/errors': 'Every stable error code, its HTTP status, and where it is thrown.',
+  'reference/cli': 'Every mariachi command, argument and option.',
+  'reference/tables': 'The tables framework packages own, with columns and indexes.',
+  'reference/graph': 'How the packages depend on each other.',
+};
+---
+
+<Base title="Reference" sidebar={referenceSidebar} noindex>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Reference</span>
+    <h1>Reference</h1>
+    <p class="x-lede">Generated from the source on every build, so it can't drift from the code.</p>
+  </header>
+  <div class="m-grid" style="--m-layout-grid-min: 16rem">
+    {
+      items.map((i) => (
+        <a class="m-card x-card-link" data-interactive href={href(i.route)}>
+          <div class="m-card-header"><div class="m-card-title">{i.label}</div></div>
+          <div class="m-card-body m-muted">{blurbs[i.route]}</div>
+        </a>
+      ))
+    }
+  </div>
+</Base>

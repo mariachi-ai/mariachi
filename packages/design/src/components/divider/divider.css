@@ -1,0 +1,36 @@
+@layer mariachi.components {
+  .m-divider {
+    flex-shrink: 0;
+    margin-block: var(--m-divider-spacing);
+    border: 0;
+    border-block-start: var(--m-divider-width) solid var(--m-divider-color);
+  }
+
+  .m-divider[data-orientation="vertical"] {
+    align-self: stretch;
+    min-block-size: 1em;
+    margin-block: 0;
+    margin-inline: var(--m-divider-spacing);
+    border-block-start: 0;
+    border-inline-start: var(--m-divider-width) solid var(--m-divider-color);
+  }
+
+  .m-divider:not(:empty) {
+    display: flex;
+    align-items: center;
+    gap: var(--m-divider-label-gap);
+    border-block-start: 0;
+    color: var(--m-divider-label-fg);
+    font-size: var(--m-divider-label-font-size);
+    letter-spacing: var(--m-divider-label-tracking);
+    text-transform: var(--m-divider-label-transform);
+    line-height: 1;
+  }
+
+  .m-divider:not(:empty)::before,
+  .m-divider:not(:empty)::after {
+    content: "";
+    flex: 1;
+    border-block-start: var(--m-divider-width) solid var(--m-divider-color);
+  }
+}

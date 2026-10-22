@@ -1,0 +1,61 @@
+@layer mariachi.components {
+  .m-checkbox {
+    --_bg: var(--m-checkbox-bg);
+    --_border: var(--m-checkbox-border);
+
+    display: inline-grid;
+    place-content: center;
+    flex-shrink: 0;
+    inline-size: var(--m-checkbox-size);
+    block-size: var(--m-checkbox-size);
+    margin: 0;
+    border: var(--m-checkbox-border-width) solid var(--_border);
+    border-radius: var(--m-checkbox-radius);
+    background: var(--_bg);
+    vertical-align: middle;
+    appearance: none;
+    cursor: pointer;
+    transition:
+      background-color var(--m-motion-duration-fast) var(--m-motion-easing-standard),
+      border-color var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-checkbox::before {
+    content: "";
+    inline-size: calc(var(--m-checkbox-size) * 0.62);
+    block-size: calc(var(--m-checkbox-size) * 0.62);
+    background: var(--m-checkbox-mark);
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+    transform: scale(0);
+    transition: transform var(--m-motion-duration-fast) var(--m-motion-easing-emphasized);
+  }
+
+  .m-checkbox:checked,
+  .m-checkbox:indeterminate {
+    --_bg: var(--m-checkbox-checked-bg);
+    --_border: var(--m-checkbox-checked-border);
+  }
+
+  .m-checkbox:checked::before {
+    transform: scale(1);
+  }
+
+  .m-checkbox:indeterminate::before {
+    block-size: calc(var(--m-checkbox-size) * 0.14);
+    clip-path: none;
+    transform: scale(1);
+  }
+
+  .m-checkbox:hover:not(:disabled, :checked, :indeterminate) {
+    border-color: var(--m-checkbox-hover-border);
+  }
+
+  .m-checkbox[aria-invalid="true"]:not(:checked) {
+    border-color: var(--m-checkbox-invalid-border);
+  }
+
+  .m-checkbox:disabled {
+    opacity: var(--m-checkbox-disabled-opacity);
+    cursor: not-allowed;
+  }
+}

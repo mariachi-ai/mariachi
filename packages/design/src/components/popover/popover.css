@@ -1,0 +1,145 @@
+@layer mariachi.components {
+  .m-popover {
+    min-inline-size: var(--m-popover-min-width);
+    max-inline-size: min(var(--m-popover-max-width), 100vw - 1rem);
+    padding: var(--m-popover-padding);
+    border: var(--m-popover-border-width) solid var(--m-popover-border);
+    border-radius: var(--m-popover-radius);
+    background: var(--m-popover-bg);
+    color: var(--m-popover-fg);
+    box-shadow: var(--m-popover-shadow);
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity var(--m-motion-duration-fast) var(--m-motion-easing-standard),
+      transform var(--m-motion-duration-fast) var(--m-motion-easing-standard),
+      overlay var(--m-motion-duration-fast) allow-discrete,
+      display var(--m-motion-duration-fast) allow-discrete;
+  }
+
+  .m-popover[popover]:not(:popover-open) {
+    opacity: 0;
+    transform: var(--m-popover-enter-transform);
+  }
+
+  .m-popover:popover-open {
+    @starting-style {
+      opacity: 0;
+      transform: var(--m-popover-enter-transform);
+    }
+  }
+
+  .m-popover[data-static] {
+    position: relative;
+    display: block;
+    inline-size: fit-content;
+    margin: 0;
+  }
+
+  /* Anchored to the invoking button where CSS anchor positioning exists; centred otherwise. */
+
+  @supports (position-area: block-end) {
+    .m-popover[popover][data-placement] {
+      position-try-fallbacks: flip-block, flip-inline;
+      inset: auto;
+      margin: 0;
+    }
+
+    .m-popover[popover][data-placement^="bottom"] {
+      margin-block-start: var(--m-popover-offset);
+    }
+
+    .m-popover[popover][data-placement^="top"] {
+      margin-block-end: var(--m-popover-offset);
+    }
+
+    .m-popover[popover][data-placement="bottom-start"] {
+      position-area: block-end span-inline-end;
+    }
+
+    .m-popover[popover][data-placement="bottom-end"] {
+      position-area: block-end span-inline-start;
+    }
+
+    .m-popover[popover][data-placement="bottom"] {
+      position-area: block-end;
+    }
+
+    .m-popover[popover][data-placement="top-start"] {
+      position-area: block-start span-inline-end;
+    }
+
+    .m-popover[popover][data-placement="top-end"] {
+      position-area: block-start span-inline-start;
+    }
+
+    .m-popover[popover][data-placement="top"] {
+      position-area: block-start;
+    }
+  }
+
+  .m-menu {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .m-menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--m-popover-item-gap);
+    inline-size: 100%;
+    min-block-size: max(var(--m-popover-item-height), var(--m-control-min-target));
+    padding-inline: var(--m-popover-item-padding-x);
+    border: 0;
+    border-radius: var(--m-popover-item-radius);
+    background: transparent;
+    color: var(--m-popover-item-fg);
+    font-size: var(--m-popover-item-font-size);
+    text-align: start;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .m-menu-item:hover:not([aria-disabled="true"]),
+  .m-menu-item:focus-visible {
+    background: var(--m-popover-item-hover-bg);
+    color: var(--m-popover-item-hover-fg);
+  }
+
+  .m-menu-item:focus-visible {
+    outline-offset: calc(var(--m-focus-width) * -1);
+  }
+
+  .m-menu-item[data-tone="danger"] {
+    color: var(--m-popover-item-danger-fg);
+  }
+
+  .m-menu-item[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .m-menu-shortcut {
+    margin-inline-start: auto;
+    padding-inline-start: var(--m-space-4);
+    color: var(--m-popover-shortcut-fg);
+    font-size: var(--m-popover-label-size);
+  }
+
+  .m-menu-label {
+    padding: var(--m-space-2) var(--m-popover-item-padding-x) var(--m-space-1);
+    color: var(--m-popover-label-fg);
+    font-size: var(--m-popover-label-size);
+    font-weight: var(--m-font-weight-semibold);
+  }
+
+  .m-menu-separator {
+    block-size: 0;
+    margin-block: var(--m-space-1);
+    border: 0;
+    border-block-start: var(--m-border-width-thin) solid var(--m-popover-separator);
+  }
+}

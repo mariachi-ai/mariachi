@@ -1,0 +1,55 @@
+@layer mariachi.components {
+  .m-pagination ul {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--m-pagination-gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .m-pagination-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--m-space-1);
+    min-inline-size: var(--m-pagination-size);
+    block-size: var(--m-pagination-size);
+    padding-inline: var(--m-pagination-padding-x);
+    border: var(--m-pagination-border-width) solid var(--m-pagination-border);
+    border-radius: var(--m-pagination-radius);
+    background: transparent;
+    color: var(--m-pagination-fg);
+    font-size: var(--m-pagination-font-size);
+    font-weight: var(--m-pagination-font-weight);
+    font-variant-numeric: tabular-nums;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-pagination-item:hover:not([aria-current="page"], [aria-disabled="true"], :disabled) {
+    background: var(--m-pagination-hover-bg);
+  }
+
+  .m-pagination-item[aria-current="page"] {
+    border-color: var(--m-pagination-current-border);
+    background: var(--m-pagination-current-bg);
+    color: var(--m-pagination-current-fg);
+  }
+
+  .m-pagination-item[aria-disabled="true"],
+  .m-pagination-item:disabled {
+    opacity: var(--m-pagination-disabled-opacity);
+    cursor: not-allowed;
+  }
+
+  .m-pagination-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: var(--m-pagination-size);
+    color: var(--m-color-fg-subtle);
+  }
+}

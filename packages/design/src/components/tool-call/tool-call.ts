@@ -1,0 +1,65 @@
+import { defineComponent } from '../../contract/component';
+import { ref, t } from '../../contract/tokens';
+
+// Paths are absolute: the component key is camel-cased (`toolCall`).
+const pair = (fg: string, bg: string) => ({ fg: `components.toolCall.${fg}`, bg: `components.toolCall.${bg}`, min: 4.5 });
+
+export const toolCall = defineComponent({
+  name: 'tool-call',
+  title: 'Tool call',
+  category: 'ai',
+  description: 'A collapsible record of one tool invocation: name, status, duration, arguments and result.',
+  useWhen: 'Showing what an agent did between messages (search, code execution, API calls).',
+  anatomy: {
+    'details.m-tool-call': 'The record; add open to show arguments and result',
+    '[data-status]': 'pending | running | done | error',
+    'summary': 'Holds .m-tool-call-name, .m-tool-call-status and .m-tool-call-duration',
+    '.m-tool-call-name': 'Tool name (monospace)',
+    '.m-tool-call-status': 'Status label ("Running", "Done", "Failed")',
+    '.m-tool-call-duration': 'Elapsed time, pushed to the end',
+    '.m-tool-call-body': 'Sections of arguments and results',
+    '.m-tool-call-label': 'Section heading ("Arguments", "Result")',
+  },
+  tokens: {
+    bg: t.color('Background', ref('color.bg.surface')),
+    fg: t.color('Text', ref('color.fg.default')),
+    border: t.color('Border', ref('color.border.default')),
+    errorBorder: t.color('Border when the call failed', ref('color.danger.border')),
+    borderWidth: t.length('Border width', ref('borderWidth.container')),
+    radius: t.length('Radius', ref('radius.md')),
+    paddingX: t.length('Horizontal padding', ref('space.3')),
+    summaryHeight: t.length('Summary row height', ref('control.height.md')),
+    fontSize: t.length('Text size', ref('font.size.sm')),
+    nameFamily: t.fontFamily('Tool name family', ref('font.family.mono')),
+    nameWeight: t.fontWeight('Tool name weight', ref('font.weight.medium')),
+    metaFg: t.color('Duration and labels', ref('color.fg.muted')),
+    bodyBg: t.color('Body background', ref('color.bg.sunken')),
+    statusRadius: t.length('Status pill radius', ref('radius.full')),
+    statusFontSize: t.length('Status text size', ref('font.size.xs')),
+    pendingBg: t.color('Pending status background', ref('color.bg.sunken')),
+    pendingFg: t.color('Pending status text', ref('color.fg.muted')),
+    runningBg: t.color('Running status background', ref('color.info.bg')),
+    runningFg: t.color('Running status text', ref('color.info.fg')),
+    doneBg: t.color('Done status background', ref('color.success.bg')),
+    doneFg: t.color('Done status text', ref('color.success.fg')),
+    errorBg: t.color('Error status background', ref('color.danger.bg')),
+    errorFg: t.color('Error status text', ref('color.danger.fg')),
+    pulseDuration: t.duration('Running pulse period', 'calc(var(--m-motion-duration-slow) * 5)'),
+  },
+  contrast: [
+    pair('fg', 'bg'),
+    pair('metaFg', 'bg'),
+    pair('metaFg', 'bodyBg'),
+    pair('pendingFg', 'pendingBg'),
+    pair('runningFg', 'runningBg'),
+    pair('doneFg', 'doneBg'),
+    pair('errorFg', 'errorBg'),
+  ],
+  requires: ['code'],
+  a11y: [
+    'The status is text ("Running", "Failed"), not only a colour or dot.',
+    'Native <details>/<summary> gives keyboard toggling; keep failed calls open so the error is visible.',
+    'Put live status changes in the thread\'s live region rather than announcing every tool update.',
+    'Give argument and result <pre> blocks tabindex="0" so keyboard users can scroll long output.',
+  ],
+});

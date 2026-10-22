@@ -2,7 +2,7 @@
 /**
  * Mariachi convention linter. Rules:
  *   no-raw-error         `throw new Error(` in framework source
- *   no-process-env       `process.env` outside @mariachi/config (and app entry points)
+ *   no-process-env       `process.env` outside @mariachi/config (and app entry points, Playwright configs)
  *   no-js-extension      relative imports ending in `.js`
  *   no-controller-service controllers importing from services
  */
@@ -14,6 +14,7 @@ const violations = [];
 
 const PROCESS_ENV_ALLOWED = [
   /^packages\/config\//,
+  /(^|\/)playwright\.config\.ts$/,
   /^packages\/create\//,
   /^packages\/cli\//,
   /^apps\/[^/]+\/src\/(index|main)\.ts$/,
@@ -23,16 +24,16 @@ const PROCESS_ENV_ALLOWED = [
 function walk(dir) {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-    if (['node_modules', 'dist', '.turbo', 'templates'].includes(e.name)) return [];
+    if (['node_modules', 'dist', '.turbo', 'templates', '.astro', '.cache'].includes(e.name)) return [];
     const p = path.join(dir, e.name);
     if (e.isDirectory()) return walk(p);
-    return e.name.endsWith('.ts') && !e.name.endsWith('.d.ts') ? [p] : [];
+    return /\.(ts|tsx|astro)$/.test(e.name) && !e.name.endsWith('.d.ts') ? [p] : [];
   });
 }
 
 for (const file of roots.flatMap(walk)) {
   const rel = file.split(path.sep).join('/');
-  const isTest = /\.(test|spec)\.ts$/.test(rel) || rel.includes('/test/') || rel.includes('/__tests__/');
+  const isTest = /\.(test|spec|e2e)\.tsx?$/.test(rel) || rel.includes('/test/') || rel.includes('/__tests__/');
   const lines = fs.readFileSync(file, 'utf8').split('\n');
   lines.forEach((line, i) => {
     const loc = `${rel}:${i + 1}`;

@@ -1,0 +1,80 @@
+@layer mariachi.components {
+  .m-badge {
+    --_bg: var(--m-badge-neutral-bg);
+    --_fg: var(--m-badge-neutral-fg);
+    --_border: var(--m-badge-neutral-border);
+    --_solid-bg: var(--m-badge-neutral-solid-bg);
+    --_solid-fg: var(--m-badge-neutral-solid-fg);
+    --_paint-bg: var(--_bg);
+    --_paint-fg: var(--_fg);
+    --_paint-border: var(--_border);
+
+    display: inline-flex;
+    align-items: center;
+    gap: var(--m-badge-gap);
+    block-size: var(--m-badge-height);
+    padding-inline: var(--m-badge-padding-x);
+    border: var(--m-badge-border-width) solid var(--_paint-border);
+    border-radius: var(--m-badge-radius);
+    background: var(--_paint-bg);
+    color: var(--_paint-fg);
+    font-size: var(--m-badge-font-size);
+    font-weight: var(--m-badge-font-weight);
+    letter-spacing: var(--m-badge-tracking);
+    text-transform: var(--m-badge-text-transform);
+    line-height: 1;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  .m-badge[data-tone="accent"] {
+    --_bg: var(--m-color-accent-subtle);
+    --_fg: var(--m-color-accent-text);
+    --_border: var(--m-color-accent-default);
+    --_solid-bg: var(--m-color-accent-default);
+    --_solid-fg: var(--m-color-accent-fg);
+  }
+
+  .m-badge[data-tone="success"] {
+    --_bg: var(--m-color-success-bg);
+    --_fg: var(--m-color-success-fg);
+    --_border: var(--m-color-success-border);
+    --_solid-bg: var(--m-color-success-solid);
+    --_solid-fg: var(--m-color-success-on-solid);
+  }
+
+  .m-badge[data-tone="warning"] {
+    --_bg: var(--m-color-warning-bg);
+    --_fg: var(--m-color-warning-fg);
+    --_border: var(--m-color-warning-border);
+    --_solid-bg: var(--m-color-warning-solid);
+    --_solid-fg: var(--m-color-warning-on-solid);
+  }
+
+  .m-badge[data-tone="danger"] {
+    --_bg: var(--m-color-danger-bg);
+    --_fg: var(--m-color-danger-fg);
+    --_border: var(--m-color-danger-border);
+    --_solid-bg: var(--m-color-danger-solid);
+    --_solid-fg: var(--m-color-danger-on-solid);
+  }
+
+  .m-badge[data-tone="info"] {
+    --_bg: var(--m-color-info-bg);
+    --_fg: var(--m-color-info-fg);
+    --_border: var(--m-color-info-border);
+    --_solid-bg: var(--m-color-info-solid);
+    --_solid-fg: var(--m-color-info-on-solid);
+  }
+
+  .m-badge[data-variant="solid"] {
+    --_paint-bg: var(--_solid-bg);
+    --_paint-fg: var(--_solid-fg);
+    --_paint-border: var(--_solid-bg);
+  }
+
+  .m-badge[data-variant="outline"] {
+    --_paint-bg: transparent;
+    --_paint-border: var(--_fg);
+  }
+}

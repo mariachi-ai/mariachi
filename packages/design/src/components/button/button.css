@@ -1,0 +1,116 @@
+@layer mariachi.components {
+  .m-button {
+    --_bg: var(--m-button-secondary-bg);
+    --_fg: var(--m-button-secondary-fg);
+    --_border: var(--m-button-secondary-border);
+    --_hover-bg: var(--m-button-secondary-hover-bg);
+    --_active-bg: var(--m-button-secondary-active-bg);
+    --_height: var(--m-button-height-md);
+    --_padding-x: var(--m-button-padding-x-md);
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--m-button-gap);
+    block-size: var(--_height);
+    padding-inline: var(--_padding-x);
+    border: var(--m-button-border-width) solid var(--_border);
+    border-radius: var(--m-button-radius);
+    background: var(--_bg);
+    color: var(--_fg);
+    box-shadow: var(--m-button-shadow);
+    font-family: var(--m-button-font-family);
+    font-size: var(--m-button-font-size);
+    font-weight: var(--m-button-font-weight);
+    letter-spacing: var(--m-button-tracking);
+    text-transform: var(--m-button-text-transform);
+    line-height: 1;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      background-color var(--m-motion-duration-fast) var(--m-motion-easing-standard),
+      border-color var(--m-motion-duration-fast) var(--m-motion-easing-standard),
+      box-shadow var(--m-motion-duration-fast) var(--m-motion-easing-standard),
+      transform var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-button:hover:not(:disabled, [aria-disabled="true"], [aria-busy="true"]) {
+    background: var(--_hover-bg);
+    box-shadow: var(--m-button-hover-shadow);
+    transform: var(--m-button-hover-transform);
+  }
+
+  .m-button:active:not(:disabled, [aria-disabled="true"], [aria-busy="true"]) {
+    background: var(--_active-bg);
+    box-shadow: var(--m-button-active-shadow);
+    transform: var(--m-button-active-transform);
+  }
+
+  .m-button[data-variant="primary"] {
+    --_bg: var(--m-button-primary-bg);
+    --_fg: var(--m-button-primary-fg);
+    --_border: var(--m-button-primary-border);
+    --_hover-bg: var(--m-button-primary-hover-bg);
+    --_active-bg: var(--m-button-primary-active-bg);
+  }
+
+  .m-button[data-variant="ghost"] {
+    --_bg: var(--m-button-ghost-bg);
+    --_fg: var(--m-button-ghost-fg);
+    --_border: var(--m-button-ghost-border);
+    --_hover-bg: var(--m-button-ghost-hover-bg);
+    --_active-bg: var(--m-button-ghost-active-bg);
+
+    box-shadow: none;
+  }
+
+  .m-button[data-variant="danger"] {
+    --_bg: var(--m-button-danger-bg);
+    --_fg: var(--m-button-danger-fg);
+    --_border: var(--m-button-danger-border);
+    --_hover-bg: var(--m-button-danger-hover-bg);
+    --_active-bg: var(--m-button-danger-active-bg);
+  }
+
+  .m-button[data-size="sm"] {
+    --_height: var(--m-button-height-sm);
+    --_padding-x: var(--m-button-padding-x-sm);
+  }
+
+  .m-button[data-size="lg"] {
+    --_height: var(--m-button-height-lg);
+    --_padding-x: var(--m-button-padding-x-lg);
+  }
+
+  .m-button[data-icon-only] {
+    inline-size: var(--_height);
+    padding-inline: 0;
+  }
+
+  .m-button:disabled,
+  .m-button[aria-disabled="true"] {
+    opacity: var(--m-button-disabled-opacity);
+    cursor: not-allowed;
+  }
+
+  .m-button[aria-busy="true"] {
+    position: relative;
+    color: transparent;
+    cursor: progress;
+  }
+
+  .m-button[aria-busy="true"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    inline-size: 1em;
+    block-size: 1em;
+    margin: auto;
+    border: var(--m-border-width-thick) solid var(--_fg);
+    border-inline-end-color: transparent;
+    border-radius: var(--m-radius-full);
+    animation: m-spin calc(var(--m-motion-duration-slow) * 2.5) linear infinite;
+  }
+}

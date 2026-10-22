@@ -1,0 +1,38 @@
+@layer mariachi.components {
+  .m-skeleton {
+    --_radius: var(--m-skeleton-radius);
+
+    display: block;
+    block-size: var(--m-skeleton-text-height);
+    border-radius: var(--_radius);
+    background-color: var(--m-skeleton-bg);
+    background-image: linear-gradient(
+      90deg,
+      var(--m-skeleton-bg) 30%,
+      var(--m-skeleton-highlight) 50%,
+      var(--m-skeleton-bg) 70%
+    );
+    background-size: 200% 100%;
+    animation: m-shimmer var(--m-skeleton-duration) linear infinite;
+  }
+
+  .m-skeleton[data-shape="circle"] {
+    --_radius: var(--m-radius-full);
+
+    flex: none;
+    inline-size: var(--m-skeleton-circle-size);
+    block-size: var(--m-skeleton-circle-size);
+  }
+
+  .m-skeleton[data-shape="block"] {
+    --_radius: var(--m-skeleton-block-radius);
+
+    block-size: var(--m-skeleton-block-height);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .m-skeleton {
+      background-image: none;
+    }
+  }
+}

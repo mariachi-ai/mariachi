@@ -1,0 +1,125 @@
+---
+import Base from '../../layouts/Base.astro';
+import { designSidebar } from '../../lib/sidebars';
+import { loadDesign } from '../../loaders/design';
+import { samples } from '../../samples';
+
+const catalog = loadDesign();
+const componentHtml = (c: (typeof catalog.components)[number]) =>
+  c.examples.map((e) => `<div class="m-stack" data-gap="2"><span class="m-subtle x-mono">${e.name}</span>${e.html}</div>`).join('');
+---
+
+<Base title="Compare presets" description="One component or page in two to four presets side by side." sidebar={designSidebar(catalog)} wide>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Design</span>
+    <h1>Compare presets</h1>
+    <p class="x-lede">The same markup in up to four presets, each with its own mode. The URL updates, so you can share a comparison.</p>
+  </header>
+  <form class="m-card x-compare-controls" id="x-compare-form" onsubmit="return false">
+    <div class="m-card-body m-cluster" data-gap="6" data-align="end">
+      <div class="m-field">
+        <label class="m-field-label" for="x-compare-item">Show</label>
+        <select class="m-select" id="x-compare-item">
+          <optgroup label="Sample pages">
+            {samples.map((s) => <option value={`sample:${s.name}`}>{s.title}</option>)}
+          </optgroup>
+          <optgroup label="Components">
+            {catalog.components.map((c) => <option value={c.name}>{c.title}</option>)}
+          </optgroup>
+        </select>
+      </div>
+      <fieldset class="m-stack" data-gap="2">
+        <legend class="m-field-label">Presets (2–4)</legend>
+        <div class="m-cluster" data-gap="4">
+          {
+            catalog.presets.map((p, i) => (
+              <label class="m-field" data-layout="inline">
+                <input type="checkbox" class="m-checkbox" name="preset" value={p.name} checked={i < 2} />
+                <span>{p.label}</span>
+              </label>
+            ))
+          }
+        </div>
+      </fieldset>
+    </div>
+  </form>
+  <div class="x-compare" id="x-compare-panels" aria-live="polite" data-pagefind-ignore></div>
+
+  {catalog.components.map((c) => <template data-x-item={c.name} set:html={componentHtml(c)} />)}
+  {samples.map((s) => <template data-x-item={`sample:${s.name}`} set:html={s.html} />)}
+  <script type="application/json" id="x-compare-presets" set:html={JSON.stringify(catalog.presets.map((p) => ({ name: p.name, label: p.label })))} />
+
+  <script>
+    import { namespaceHtml } from '../../lib/examples';
+
+    const form = document.querySelector<HTMLFormElement>('#x-compare-form')!;
+    const item = document.querySelector<HTMLSelectElement>('#x-compare-item')!;
+    const panels = document.querySelector<HTMLElement>('#x-compare-panels')!;
+    const labels = new Map<string, string>(JSON.parse(document.querySelector('#x-compare-presets')!.textContent!).map((p: { name: string; label: string }) => [p.name, p.label]));
+    const boxes = [...form.querySelectorAll<HTMLInputElement>('input[name="preset"]')];
+    const modes = new Map<string, string>();
+
+    const params = new URLSearchParams(location.search);
+    if (params.get('item') && item.querySelector(`option[value="${CSS.escape(params.get('item')!)}"]`)) item.value = params.get('item')!;
+    const wanted = params.get('presets')?.split(',').filter((p) => labels.has(p));
+    if (wanted && wanted.length >= 1) for (const b of boxes) b.checked = wanted.includes(b.value);
+    for (const pair of params.get('modes')?.split(',') ?? []) {
+      const [p, m] = pair.split(':');
+      if (p && m) modes.set(p, m);
+    }
+
+    function selected(): string[] {
+      return boxes.filter((b) => b.checked).map((b) => b.value);
+    }
+
+    function sync(): void {
+      const chosen = selected();
+      // Keep between two and four: disable unchecking below two and checking above four.
+      for (const b of boxes) b.disabled = (b.checked && chosen.length <= 2) || (!b.checked && chosen.length >= 4);
+      const url = new URL(location.href);
+      url.searchParams.set('item', item.value);
+      url.searchParams.set('presets', chosen.join(','));
+      url.searchParams.set('modes', chosen.map((p) => `${p}:${modes.get(p) ?? 'light'}`).join(','));
+      history.replaceState(null, '', url);
+    }
+
+    function render(): void {
+      const template = document.querySelector<HTMLTemplateElement>(`template[data-x-item="${CSS.escape(item.value)}"]`);
+      const html = template?.innerHTML ?? '';
+      panels.replaceChildren(
+        ...selected().map((preset) => {
+          const panel = document.createElement('section');
+          panel.className = 'x-compare-panel';
+          panel.dataset.theme = preset;
+          panel.dataset.mode = modes.get(preset) ?? 'light';
+          panel.setAttribute('aria-label', `${labels.get(preset)} preset`);
+          const head = document.createElement('div');
+          head.className = 'm-cluster x-compare-head';
+          head.dataset.justify = 'between';
+          const title = document.createElement('strong');
+          title.textContent = labels.get(preset) ?? preset;
+          const mode = document.createElement('select');
+          mode.className = 'm-select';
+          mode.dataset.size = 'sm';
+          mode.setAttribute('aria-label', `${labels.get(preset)} mode`);
+          for (const m of ['light', 'dark']) mode.add(new Option(m === 'light' ? 'Light' : 'Dark', m, false, panel.dataset.mode === m));
+          mode.addEventListener('change', () => {
+            modes.set(preset, mode.value);
+            panel.dataset.mode = mode.value;
+            sync();
+          });
+          head.append(title, mode);
+          const body = document.createElement('div');
+          body.innerHTML = namespaceHtml(html, `c-${preset}`);
+          panel.append(head, body);
+          return panel;
+        }),
+      );
+      sync();
+    }
+
+    item.addEventListener('change', render);
+    for (const b of boxes) b.addEventListener('change', render);
+    render();
+  </script>
+</Base>
