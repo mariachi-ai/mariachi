@@ -1,0 +1,94 @@
+@layer mariachi.components {
+  .m-citation {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: var(--m-citation-chip-size);
+    block-size: var(--m-citation-chip-size);
+    padding-inline: 0.3em;
+    margin-inline: 0.1em;
+    border-radius: var(--m-citation-chip-radius);
+    background: var(--m-citation-chip-bg);
+    color: var(--m-citation-chip-fg);
+    font-size: var(--m-citation-chip-font-size);
+    font-weight: var(--m-font-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    text-decoration: none;
+    vertical-align: var(--m-citation-chip-offset);
+    transition: background-color var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-citation:hover {
+    background: var(--m-citation-chip-hover-bg);
+    color: var(--m-citation-chip-hover-fg);
+  }
+
+  .m-citation-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--m-citation-list-gap);
+    padding: 0;
+    list-style: none;
+    counter-reset: m-citation;
+  }
+
+  .m-citation-source {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--m-space-3);
+    row-gap: var(--m-space-1);
+    padding: var(--m-citation-source-padding);
+    border: var(--m-citation-source-border-width) solid var(--m-citation-source-border);
+    border-radius: var(--m-citation-source-radius);
+    background: var(--m-citation-source-bg);
+    font-size: var(--m-citation-font-size);
+    counter-increment: m-citation;
+  }
+
+  .m-citation-source > * {
+    grid-column: 2;
+  }
+
+  .m-citation-source::before {
+    content: counter(m-citation);
+    display: grid;
+    grid-row: 1 / span 3;
+    grid-column: 1;
+    place-items: center;
+    min-inline-size: var(--m-citation-chip-size);
+    block-size: var(--m-citation-chip-size);
+    border-radius: var(--m-citation-chip-radius);
+    background: var(--m-citation-chip-bg);
+    color: var(--m-citation-chip-fg);
+    font-size: var(--m-citation-chip-font-size);
+    font-weight: var(--m-font-weight-semibold);
+  }
+
+  .m-citation-title {
+    color: var(--m-citation-title-fg);
+    font-weight: var(--m-font-weight-medium);
+  }
+
+  a.m-citation-title {
+    text-decoration: none;
+  }
+
+  a.m-citation-title:hover {
+    text-decoration: underline;
+  }
+
+  .m-citation-domain {
+    color: var(--m-citation-domain-fg);
+    font-family: var(--m-font-family-mono);
+    font-size: var(--m-citation-chip-font-size);
+  }
+
+  .m-citation-snippet {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--m-citation-snippet-fg);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+}

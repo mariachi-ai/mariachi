@@ -1,0 +1,64 @@
+---
+import TableWrap from '../../components/TableWrap.astro';
+import type { Heading } from '../../data/schema';
+import Base from '../../layouts/Base.astro';
+import { referenceSidebar } from '../../lib/sidebars';
+import { href } from '../../lib/url';
+import { loadPackages } from '../../loaders/packages';
+import { loadTables } from '../../loaders/tables';
+
+const [tables, packages] = await Promise.all([loadTables(), loadPackages()]);
+const slugOf = (name: string) => packages.find((p) => p.name === name)?.slug;
+const toc: Heading[] = tables.map((t) => ({ depth: 2, id: t.tableName, text: t.tableName }));
+---
+
+<Base title="Framework tables" description="Every table the framework owns, from @mariachi/schema." sidebar={referenceSidebar} toc={toc}>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Reference</span>
+    <h1>Framework tables</h1>
+    <p class="x-lede">
+      The {tables.length} tables framework packages own, from <a href={href('packages/schema')}>@mariachi/schema</a>. Include them in your schema module so
+      <code class="m-code-inline">mariachi db generate</code> migrates them with your own.
+    </p>
+  </header>
+  {
+    tables.map((t) => (
+      <section class="x-section" id={t.tableName}>
+        <h2 class="x-mono"><a class="x-anchor" href={`#${t.tableName}`}>{t.tableName}</a></h2>
+        <div class="x-meta">
+          <span>Owned by <a href={href(`packages/${slugOf(t.package)}`)}>{t.package}</a></span>
+          <span>Export <code class="m-code-inline">{t.exportName}</code></span>
+          {t.tenantColumn && <span class="m-badge" data-tone="info">tenant-scoped ({t.tenantColumn})</span>}
+          {t.softDeleteColumn && <span class="m-badge">soft delete ({t.softDeleteColumn})</span>}
+        </div>
+        <TableWrap label="Columns">
+          <table class="m-table" data-density="compact">
+            <thead><tr><th>Column</th><th>Type</th><th>Constraints</th><th>Default</th><th>References</th></tr></thead>
+            <tbody>
+              {t.columns.map((c) => (
+                <tr>
+                  <td><code class="m-code-inline">{c.name}</code></td>
+                  <td class="x-mono">{c.type}</td>
+                  <td>
+                    <span class="m-cluster" data-gap="1">
+                      {c.primaryKey && <span class="m-badge" data-tone="accent">pk</span>}
+                      {c.notNull && <span class="m-badge">not null</span>}
+                      {c.unique && <span class="m-badge">unique</span>}
+                    </span>
+                  </td>
+                  <td class="x-mono">{c.default ?? ''}</td>
+                  <td>{c.references && <a href={`#${c.references.split('.')[0]}`} class="x-mono">{c.references}</a>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
+        {t.indexes.length > 0 && (
+          <p class="m-muted">
+            Indexes: {t.indexes.map((i, n) => (<>{n > 0 && ' · '}<span class="x-mono">{i.name}</span> ({i.columns.join(', ')}){i.unique && ' unique'}</>))}
+          </p>
+        )}
+      </section>
+    ))
+  }
+</Base>

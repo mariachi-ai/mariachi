@@ -1,0 +1,120 @@
+---
+import Code from '../../components/Code.astro';
+import Base from '../../layouts/Base.astro';
+import { componentCategoryTitle, designSidebar } from '../../lib/sidebars';
+import { href } from '../../lib/url';
+import { loadDesign } from '../../loaders/design';
+
+const catalog = loadDesign();
+const categories = [...new Set(catalog.components.map((c) => c.category))];
+const mini = `<div class="m-stack" data-gap="3">
+  <div class="m-cluster" data-gap="2"><button class="m-button" data-variant="primary" data-size="sm">Save</button><button class="m-button" data-size="sm">Cancel</button><span class="m-badge" data-tone="success">Live</span></div>
+  <input class="m-input" data-size="sm" placeholder="Search…" aria-label="Search" />
+  <div class="m-alert" data-tone="info" role="status"><div class="m-alert-content"><div class="m-alert-title">Heads up</div><div class="m-alert-body">Budgets reset on the 1st.</div></div></div>
+</div>`;
+const usage = `<!-- Any web app: link the library and one or more presets -->
+<link rel="stylesheet" href="node_modules/@mariachi/design/dist/css/mariachi.css">
+<link rel="stylesheet" href="node_modules/@mariachi/design/dist/css/themes/minimal.css">
+
+<html data-theme="minimal" data-mode="auto">
+  <button class="m-button" data-variant="primary">Save</button>
+</html>`;
+const imports = `// With a bundler
+import '@mariachi/design/mariachi.css';
+import '@mariachi/design/themes/minimal.css';
+
+// Or only what you use
+import '@mariachi/design/base.css';
+import '@mariachi/design/components/button.css';
+import '@mariachi/design/components/card.css';`;
+const levels = [
+  { title: 'One token, everywhere', code: ':root { --m-color-accent-default: oklch(0.62 0.19 25); }' },
+  { title: 'One component', code: ':root { --m-button-radius: 999px; }' },
+  { title: 'One variant or one area', code: '.marketing .m-card { --m-card-shadow: none; }' },
+  { title: 'Replace a component', code: "defineDesign({ base: 'minimal', replace: { card: './card.css' } })" },
+  { title: 'A whole preset', code: "extendTheme(minimal, { name: 'acme', tokens: { radius: { md: '10px' } } })" },
+];
+---
+
+<Base title="Design" description="Framework-agnostic tokens and CSS: one contract, interchangeable presets, overrides at any granularity." sidebar={designSidebar(catalog)}>
+  <header class="x-page-header">
+    <span class="x-eyebrow">@mariachi/design</span>
+    <h1>One markup. {catalog.presets.length} complete designs.</h1>
+    <p class="x-lede">
+      Tokens and CSS that work in any web app: React, Vue, Svelte, server-rendered HTML or none. Every preset satisfies the same token contract, so switching designs is one attribute,
+      and overriding one tiny piece is one line.
+    </p>
+    <div class="m-cluster">
+      <a class="m-button" data-variant="primary" href={href('design/compare')}>Compare presets</a>
+      <a class="m-button" href={href('design/playground')}>Open the playground</a>
+      <a class="m-button" data-variant="ghost" href={href('packages/design')}>Package</a>
+    </div>
+  </header>
+
+  <section class="x-section">
+    <h2>Presets</h2>
+    <div class="m-grid" style="--m-layout-grid-min: 18rem" data-pagefind-ignore>
+      {
+        catalog.presets.map((p) => (
+          <div class="x-preset-frame x-has-stretched" data-theme={p.name}>
+            <div class="m-stack" data-gap="1">
+              <a class="x-stretched x-preset-name" href={href(`design/presets/${p.name}`)}>{p.label}</a>
+              <span class="m-muted">{p.description}</span>
+            </div>
+            <div inert aria-hidden="true"><Fragment set:html={mini} /></div>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="x-section">
+    <h2>Use it</h2>
+    <div class="m-grid" style="--m-layout-grid-min: 22rem">
+      <Code code={usage} lang="html" label="index.html" />
+      <Code code={imports} lang="ts" label="main.ts" />
+    </div>
+    <p class="m-muted">
+      <code class="m-code-inline">data-mode</code> is <code class="m-code-inline">auto</code> (follows the OS), <code class="m-code-inline">light</code> or
+      <code class="m-code-inline">dark</code>, on the element carrying <code class="m-code-inline">data-theme</code>. Nest another <code class="m-code-inline">data-theme</code> to restyle a region.
+    </p>
+  </section>
+
+  <section class="x-section">
+    <h2>Override exactly what you need</h2>
+    <p class="m-muted">Every visual property reads a token, everything sits in cascade layers, and your own CSS always wins. Overrides never fork a preset.</p>
+    <ol class="m-stack x-levels" data-gap="3">
+      {
+        levels.map((l, i) => (
+          <li class="m-card" data-variant="outline">
+            <div class="m-card-body m-stack" data-gap="2">
+              <strong>{i + 1}. {l.title}</strong>
+              <Code code={l.code} lang={i < 3 ? 'css' : 'ts'} label={false} />
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+    <p><a href={href('design/playground')}>The playground</a> writes these for you.</p>
+  </section>
+
+  <section class="x-section">
+    <h2>{catalog.components.length} components</h2>
+    {
+      categories.map((cat) => (
+        <div class="m-stack" data-gap="2">
+          <h3>{componentCategoryTitle(cat)}</h3>
+          <div class="m-cluster" data-gap="2">
+            {catalog.components
+              .filter((c) => c.category === cat)
+              .map((c) => (
+                <a class="m-button" data-size="sm" href={href(`design/components/${c.name}`)}>
+                  {c.title}
+                </a>
+              ))}
+          </div>
+        </div>
+      ))
+    }
+  </section>
+</Base>

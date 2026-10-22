@@ -1,0 +1,51 @@
+import { defineComponent } from '../../contract/component';
+import { ref, t } from '../../contract/tokens';
+
+export const toast = defineComponent({
+  name: 'toast',
+  title: 'Toast',
+  category: 'feedback',
+  description: 'Brief, non-blocking notifications stacked in a fixed live region.',
+  useWhen: 'Confirming something the user just did, or reporting a background event. Use an alert for messages that must stay on the page.',
+  anatomy: {
+    '.m-toast-region': 'Fixed container with aria-live="polite"; keep it in the page and add toasts into it',
+    '[data-position] on the region': 'bottom-end (default) | bottom-start | top-end | top-start | bottom | top',
+    '[data-static] on the region': 'Renders inline (docs and previews)',
+    '.m-toast': 'One notification; role="status" (or role="alert" for errors)',
+    '[data-tone]': 'neutral (default) | accent | success | warning | danger | info: colours the leading stripe',
+    '.m-toast-content': 'Wraps title and body',
+    '.m-toast-title': 'Short summary',
+    '.m-toast-body': 'Details',
+    '.m-toast-actions': 'Optional buttons (an undo, a link)',
+    '.m-toast-close': 'Close button (aria-label="Dismiss")',
+  },
+  tokens: {
+    bg: t.color('Background', ref('color.bg.raised')),
+    fg: t.color('Text', ref('color.fg.default')),
+    bodyFg: t.color('Body text', ref('color.fg.muted')),
+    border: t.color('Border colour', ref('color.border.default')),
+    borderWidth: t.length('Border width', ref('borderWidth.container')),
+    accent: t.color('Neutral tone stripe colour', ref('color.border.strong')),
+    accentWidth: t.length('Width of the leading (inline-start) stripe', ref('borderWidth.thick')),
+    radius: t.length('Corner radius', ref('radius.container')),
+    shadow: t.shadow('Shadow', ref('shadow.overlay')),
+    padding: t.length('Padding', ref('space.4')),
+    gap: t.length('Space between content and the close button', ref('space.3')),
+    fontSize: t.length('Text size', ref('font.size.sm')),
+    titleWeight: t.fontWeight('Title weight', ref('font.weight.semibold')),
+    width: t.length('Toast width', '24rem'),
+    offset: t.length('Distance from the viewport edge', ref('space.4')),
+    stackGap: t.length('Space between stacked toasts', ref('space.2')),
+    zIndex: t.zIndex('Stacking level', ref('z.toast')),
+  },
+  contrast: [
+    { fg: 'fg', bg: 'bg', min: 4.5 },
+    { fg: 'bodyFg', bg: 'bg', min: 4.5 },
+  ],
+  a11y: [
+    'Keep the live region in the DOM from page load (empty), then insert toasts into it; regions added together with their content are often not announced.',
+    'Use role="status" with aria-live="polite" for confirmations; reserve role="alert" for errors.',
+    'Don\'t auto-dismiss toasts that contain actions, and give at least 5 seconds (longer for long text) when you do; pause the timer on hover and focus.',
+    'The close button needs aria-label="Dismiss".',
+  ],
+});

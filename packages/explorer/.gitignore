@@ -1,0 +1,8 @@
+dist
+.astro
+.cache
+test-results
+playwright-report
+# Visual baselines are per platform; only the Linux ones (generated in the Playwright image, as CI runs) are kept.
+test/browser/__screenshots__/*
+!test/browser/__screenshots__/linux/

@@ -32,7 +32,17 @@
       "trailingCommas": "all"
     }
   },
+  "css": {
+    "linter": {
+      "enabled": false
+    }
+  },
   "files": {
-    "ignore": ["**/dist/**", "**/node_modules/**", "**/.turbo/**", "**/coverage/**"]
+    "ignore": [
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/.turbo/**",
+      "**/coverage/**"
+    ]
   }
 }

@@ -1,0 +1,9 @@
+---
+interface Props {
+  status: string;
+}
+const { status } = Astro.props;
+const tone = status === 'beta' ? 'success' : status === 'alpha' ? 'warning' : 'neutral';
+---
+
+<span class="m-badge" data-tone={tone}>{status}</span>

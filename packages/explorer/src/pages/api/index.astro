@@ -1,0 +1,48 @@
+---
+import TableWrap from '../../components/TableWrap.astro';
+import StatusBadge from '../../components/StatusBadge.astro';
+import Base from '../../layouts/Base.astro';
+import { apiSidebar } from '../../lib/sidebars';
+import { href } from '../../lib/url';
+import { loadApi } from '../../loaders/api';
+import { loadCategories, loadPackages } from '../../loaders/packages';
+
+const [api, packages, categories] = await Promise.all([loadApi(), loadPackages(), loadCategories()]);
+const rows = packages.map((p) => {
+  const a = api.find((x) => x.slug === p.slug);
+  const symbols = a?.entries.flatMap((e) => e.symbols) ?? [];
+  const kinds: Record<string, number> = {};
+  for (const s of symbols) kinds[s.kind] = (kinds[s.kind] ?? 0) + 1;
+  return { p, count: symbols.length, entries: a?.entries.length ?? 0, kinds };
+});
+---
+
+<Base title="API" description="Every exported symbol of every package, read from the built type declarations." sidebar={apiSidebar(api, packages, categories)}>
+  <header class="x-page-header">
+    <span class="x-eyebrow">API</span>
+    <h1>API reference</h1>
+    <p class="x-lede">
+      Read from each package's built <code class="m-code-inline">.d.ts</code> files, so it lists exactly what you can import, with signatures and JSDoc.
+    </p>
+  </header>
+  <TableWrap label="Packages and symbol counts">
+    <table class="m-table">
+      <thead>
+        <tr><th>Package</th><th>Status</th><th>Imports</th><th>Symbols</th><th>Breakdown</th></tr>
+      </thead>
+      <tbody>
+        {
+          rows.filter((r) => r.count > 0).map((r) => (
+            <tr>
+              <td><a class="x-mono" href={href(`api/${r.p.slug}`)}>{r.p.name}</a></td>
+              <td><StatusBadge status={r.p.status} /></td>
+              <td>{r.entries}</td>
+              <td>{r.count}</td>
+              <td class="m-muted">{Object.entries(r.kinds).map(([k, n]) => `${n} ${k}${n === 1 ? '' : k === 'class' ? 'es' : 's'}`).join(', ')}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </TableWrap>
+</Base>

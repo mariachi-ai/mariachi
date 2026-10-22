@@ -1,0 +1,55 @@
+@layer mariachi.components {
+  .m-tooltip {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .m-tooltip::after {
+    content: attr(data-tip);
+    position: absolute;
+    inset-block-end: calc(100% + var(--m-tooltip-offset));
+    left: 50%;
+    z-index: var(--m-tooltip-z-index);
+    inline-size: max-content;
+    max-inline-size: var(--m-tooltip-max-width);
+    padding: var(--m-tooltip-padding-y) var(--m-tooltip-padding-x);
+    border-radius: var(--m-tooltip-radius);
+    background: var(--m-tooltip-bg);
+    color: var(--m-tooltip-fg);
+    box-shadow: var(--m-tooltip-shadow);
+    font-size: var(--m-tooltip-font-size);
+    font-weight: var(--m-tooltip-font-weight);
+    line-height: var(--m-font-leading-tight);
+    letter-spacing: normal;
+    text-align: center;
+    text-transform: none;
+    white-space: normal;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, 0.25rem);
+    transition:
+      opacity var(--m-motion-duration-fast) var(--m-motion-easing-standard),
+      transform var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-tooltip[data-placement="bottom"]::after {
+    inset-block: calc(100% + var(--m-tooltip-offset)) auto;
+    transform: translate(-50%, -0.25rem);
+  }
+
+  .m-tooltip:hover::after {
+    transition-delay: var(--m-tooltip-delay);
+  }
+
+  .m-tooltip:hover::after,
+  .m-tooltip:has(:focus-visible)::after,
+  .m-tooltip:focus-visible::after,
+  .m-tooltip[data-open]::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  .m-tooltip[data-open]::after {
+    transition-delay: 0s;
+  }
+}

@@ -1,0 +1,88 @@
+@layer mariachi.components {
+  .m-accordion {
+    display: flex;
+    flex-direction: column;
+    border: var(--m-accordion-border-width) solid var(--m-accordion-border);
+    border-radius: var(--m-accordion-radius);
+    background: var(--m-accordion-bg);
+    overflow: clip;
+
+    interpolate-size: allow-keywords;
+  }
+
+  .m-accordion-item + .m-accordion-item {
+    border-block-start: var(--m-accordion-border-width) solid var(--m-accordion-border);
+  }
+
+  .m-accordion[data-variant="separated"] {
+    gap: var(--m-accordion-separated-gap);
+    border: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .m-accordion[data-variant="separated"] > .m-accordion-item {
+    border: var(--m-accordion-border-width) solid var(--m-accordion-border);
+    border-radius: var(--m-accordion-radius);
+    background: var(--m-accordion-bg);
+    overflow: clip;
+  }
+
+  .m-accordion-item > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--m-space-4);
+    padding: var(--m-accordion-padding-y) var(--m-accordion-padding-x);
+    color: var(--m-accordion-summary-fg);
+    font-size: var(--m-accordion-summary-size);
+    font-weight: var(--m-accordion-summary-weight);
+    list-style: none;
+    cursor: pointer;
+    transition: background-color var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-accordion-item > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .m-accordion-item > summary:hover {
+    background: var(--m-accordion-hover-bg);
+  }
+
+  .m-accordion-item > summary:focus-visible {
+    outline-offset: calc(var(--m-focus-width) * -1);
+  }
+
+  .m-accordion-item > summary::after {
+    content: "";
+    flex: none;
+    inline-size: var(--m-accordion-chevron-size);
+    block-size: var(--m-accordion-chevron-size);
+    border-block-end: var(--m-border-width-thick) solid currentcolor;
+    border-inline-end: var(--m-border-width-thick) solid currentcolor;
+    transform: translateY(-25%) rotate(45deg);
+    transition: transform var(--m-motion-duration-normal) var(--m-motion-easing-standard);
+  }
+
+  .m-accordion-item[open] > summary::after {
+    transform: translateY(25%) rotate(-135deg);
+  }
+
+  .m-accordion-item::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition:
+      block-size var(--m-motion-duration-normal) var(--m-motion-easing-standard),
+      content-visibility var(--m-motion-duration-normal) allow-discrete;
+  }
+
+  .m-accordion-item[open]::details-content {
+    block-size: auto;
+  }
+
+  .m-accordion-content {
+    padding: 0 var(--m-accordion-padding-x) var(--m-accordion-padding-y);
+    color: var(--m-accordion-content-fg);
+  }
+}

@@ -1,0 +1,74 @@
+---
+import TableWrap from '../../components/TableWrap.astro';
+import Base from '../../layouts/Base.astro';
+import { referenceSidebar } from '../../lib/sidebars';
+import { loadErrors } from '../../loaders/errors';
+import { loadPackages } from '../../loaders/packages';
+
+const [{ errors }, packages] = await Promise.all([loadErrors(), loadPackages()]);
+const slugOf = (name: string) => packages.find((p) => p.name === name)?.slug;
+const byCode = [...errors.reduce((m, e) => m.set(e.code, [...(m.get(e.code) ?? []), e]), new Map<string, typeof errors>())];
+// Group codes by the package that throws them first, so search results land on a package section.
+const groups = [...new Set(byCode.map(([, sites]) => sites[0].package))].sort().map((pkg) => ({ pkg, codes: byCode.filter(([, sites]) => sites[0].package === pkg) }));
+const toc = groups.map((g) => ({ depth: 2, id: slugOf(g.pkg) ?? g.pkg, text: g.pkg.replace('@mariachi/', '') }));
+const statusTone = (s: number | null) => (s === null ? 'neutral' : s >= 500 ? 'danger' : s >= 400 ? 'warning' : 'info');
+---
+
+<Base title="Error codes" description="Every MariachiError code thrown in the framework, with its HTTP status and source." sidebar={referenceSidebar} toc={toc}>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Reference</span>
+    <h1>Error codes</h1>
+    <p class="x-lede">
+      Every <code class="m-code-inline">new …Error('code', …)</code> in the framework source, found by scanning the TypeScript AST. Codes are stable: match on them, not on messages.
+      The HTTP status is what <code class="m-code-inline">errorToHttpStatus</code> returns.
+    </p>
+    <div class="x-filter" data-x-filter="errors">
+      <label class="m-sr-only" for="err-filter">Filter error codes</label>
+      <input class="m-input" id="err-filter" type="search" placeholder="Filter by code, package or message" />
+      <span class="m-muted">{byCode.length} codes, {errors.length} throw sites</span>
+    </div>
+  </header>
+  {
+    groups.map((g) => (
+      <section class="x-section" data-x-group>
+        <h2 id={slugOf(g.pkg) ?? g.pkg} class="x-mono">{g.pkg}</h2>
+        <TableWrap label="Error codes">
+          <table class="m-table" data-density="compact">
+            <thead>
+              <tr><th>Code</th><th>HTTP</th><th>Thrown as</th><th>Where</th></tr>
+            </thead>
+            <tbody>
+              {g.codes.map(([code, sites]) => (
+                <tr id={encodeURIComponent(code)} data-x-item data-x-text={`${code} ${sites.map((s) => `${s.package} ${s.message} ${s.className}`).join(' ')}`.toLowerCase()}>
+                  <td class="x-nowrap" data-pagefind-weight="8"><code class="m-code-inline">{code}</code></td>
+                  <td><span class="m-badge" data-tone={statusTone(sites[0].http)}>{sites[0].http ?? '—'}</span></td>
+                  <td>
+                    <div class="m-stack" data-gap="1">
+                      {[...new Set(sites.map((s) => s.className))].map((c) => <span class="x-mono">{c}</span>)}
+                      {sites.find((s) => s.message) ? <span class="m-muted">{sites.find((s) => s.message)!.message}</span> : <span class="m-subtle">(message computed at runtime)</span>}
+                    </div>
+                  </td>
+                  <td>
+                    <div class="m-stack" data-gap="0">
+                      {sites.map((s) => (
+                        <a class="x-mono x-target" href={`https://github.com/mariachi-ai/mariachi/blob/main/${s.file}#L${s.line}`} title={s.file}>
+                          {s.package !== g.pkg && `${s.package.replace('@mariachi/', '')}/`}
+                          {s.file.split('/').slice(-1)[0]}:{s.line}
+                        </a>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
+      </section>
+    ))
+  }
+  <p class="m-muted" data-x-empty hidden>No codes match.</p>
+  <script>
+    import { bindFilter } from '../../islands/filter';
+    bindFilter('errors');
+  </script>
+</Base>

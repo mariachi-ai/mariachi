@@ -1,0 +1,70 @@
+@layer mariachi.components {
+  .m-select {
+    --_height: var(--m-select-height-md);
+    --_padding-x: var(--m-select-padding-x-md);
+    --_chevron: var(--m-select-chevron-size);
+
+    display: block;
+    inline-size: 100%;
+    min-inline-size: 0;
+    block-size: var(--_height);
+    padding-inline: var(--_padding-x) calc(var(--_padding-x) + var(--_chevron) * 4);
+    border: var(--m-select-border-width) solid var(--m-select-border);
+    border-radius: var(--m-select-radius);
+    background-color: var(--m-select-bg);
+    background-image:
+      linear-gradient(45deg, transparent 50%, currentcolor 50%),
+      linear-gradient(135deg, currentcolor 50%, transparent 50%);
+    background-position:
+      calc(100% - var(--_padding-x) - var(--_chevron)) 55%,
+      calc(100% - var(--_padding-x)) 55%;
+    background-size: var(--_chevron) var(--_chevron);
+    background-repeat: no-repeat;
+    color: var(--m-select-fg);
+    box-shadow: var(--m-select-shadow);
+    font-family: var(--m-select-font-family);
+    font-size: var(--m-select-font-size);
+    line-height: var(--m-font-leading-normal);
+    appearance: none;
+    cursor: pointer;
+    transition:
+      border-color var(--m-motion-duration-fast) var(--m-motion-easing-standard),
+      box-shadow var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-select[data-size="sm"] {
+    --_height: var(--m-select-height-sm);
+    --_padding-x: var(--m-select-padding-x-sm);
+  }
+
+  .m-select[data-size="lg"] {
+    --_height: var(--m-select-height-lg);
+    --_padding-x: var(--m-select-padding-x-lg);
+  }
+
+  .m-select[multiple] {
+    block-size: auto;
+    padding-block: var(--m-space-1);
+    padding-inline-end: var(--_padding-x);
+    background-image: none;
+  }
+
+  .m-select:hover:not(:disabled, :focus) {
+    border-color: var(--m-select-hover-border);
+  }
+
+  .m-select:focus {
+    border-color: var(--m-select-focus-border);
+  }
+
+  .m-select[aria-invalid="true"],
+  .m-select:user-invalid {
+    border-color: var(--m-select-invalid-border);
+  }
+
+  .m-select:disabled {
+    background-color: var(--m-select-disabled-bg);
+    opacity: var(--m-select-disabled-opacity);
+    cursor: not-allowed;
+  }
+}

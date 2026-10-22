@@ -1,0 +1,99 @@
+---
+import Base from '../../layouts/Base.astro';
+import { designSidebar } from '../../lib/sidebars';
+import { loadDesign } from '../../loaders/design';
+import { samples } from '../../samples';
+
+const catalog = loadDesign();
+---
+
+<Base title="Playground" description="Change any token of any preset, preview it live, check contrast, and copy the override." sidebar={designSidebar(catalog)} wide>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Design</span>
+    <h1>Playground</h1>
+    <p class="x-lede">
+      Start from a preset, change any token, and copy the result: an override CSS file with only what changed, or a <code class="m-code-inline">mariachi.design.ts</code> config. Contrast is
+      re-checked as you type.
+    </p>
+  </header>
+
+  <div class="x-playground" data-pagefind-ignore>
+    <aside class="m-card x-playground-editor" aria-label="Tokens">
+      <div class="m-card-body m-stack" data-gap="4">
+        <div class="m-grid" style="--m-layout-grid-min: 9rem" data-gap="3">
+          <div class="m-field">
+            <label class="m-field-label" for="pg-base">Base preset</label>
+            <select class="m-select" id="pg-base" data-size="sm">
+              {catalog.presets.map((p) => <option value={p.name}>{p.label}</option>)}
+            </select>
+          </div>
+          <div class="m-field">
+            <label class="m-field-label" for="pg-scope">Tokens</label>
+            <select class="m-select" id="pg-scope" data-size="sm">
+              <option value="semantic">Semantic</option>
+              <optgroup label="Component">
+                {catalog.components.map((c) => <option value={c.name}>{c.title}</option>)}
+              </optgroup>
+            </select>
+          </div>
+        </div>
+        <div class="m-field">
+          <label class="m-sr-only" for="pg-filter">Filter tokens</label>
+          <input class="m-input" id="pg-filter" data-size="sm" type="search" placeholder="Filter tokens (e.g. accent, radius)" />
+        </div>
+        <div class="m-cluster" data-justify="between">
+          <span class="m-muted" id="pg-changed">No changes</span>
+          <button type="button" class="m-button" data-size="sm" data-variant="ghost" id="pg-reset">Reset all</button>
+        </div>
+        <div class="x-token-list" id="pg-tokens"></div>
+      </div>
+    </aside>
+
+    <div class="m-stack x-playground-main" data-gap="4">
+      <div class="m-cluster" data-justify="between">
+        <div class="m-field" style="min-inline-size: 14rem">
+          <label class="m-sr-only" for="pg-preview">Preview</label>
+          <select class="m-select" id="pg-preview" data-size="sm">
+            <optgroup label="Sample pages">
+              {samples.map((s) => <option value={`sample:${s.name}`}>{s.title}</option>)}
+            </optgroup>
+            <optgroup label="Components">
+              {catalog.components.map((c) => <option value={c.name}>{c.title}</option>)}
+            </optgroup>
+          </select>
+        </div>
+        <div class="m-cluster" data-gap="2" role="group" aria-label="Preview mode">
+          <button type="button" class="m-button" data-size="sm" data-pg-mode="light" aria-pressed="true">Light</button>
+          <button type="button" class="m-button" data-size="sm" data-pg-mode="dark" aria-pressed="false">Dark</button>
+        </div>
+      </div>
+      <div class="x-playground-preview" id="pg-stage" data-theme="x-playground" data-mode="light"></div>
+      <div class="m-alert" id="pg-contrast" role="status"></div>
+      <div class="m-tabs">
+        <div class="m-tab-list" role="tablist" aria-label="Output">
+          <button type="button" class="m-tab" role="tab" aria-selected="true" aria-controls="pg-out-css" id="pg-tab-css">Override CSS</button>
+          <button type="button" class="m-tab" role="tab" aria-selected="false" aria-controls="pg-out-config" id="pg-tab-config">mariachi.design.ts</button>
+        </div>
+        <div class="m-tab-panel" role="tabpanel" id="pg-out-css" aria-labelledby="pg-tab-css">
+          <div class="m-code-frame">
+            <div class="m-code-header"><span class="m-code-lang">design-overrides.css</span><button type="button" class="m-button x-copy-inline" data-size="sm" data-variant="ghost" data-m-copy="#pg-css">Copy</button></div>
+            <pre class="m-code"><code id="pg-css"></code></pre>
+          </div>
+        </div>
+        <div class="m-tab-panel" role="tabpanel" id="pg-out-config" aria-labelledby="pg-tab-config" hidden>
+          <div class="m-code-frame">
+            <div class="m-code-header"><span class="m-code-lang">mariachi.design.ts</span><button type="button" class="m-button x-copy-inline" data-size="sm" data-variant="ghost" data-m-copy="#pg-config">Copy</button></div>
+            <pre class="m-code"><code id="pg-config"></code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {catalog.components.map((c) => <template data-x-item={c.name} set:html={c.examples.map((e) => e.html).join('<hr class="m-divider" />')} />)}
+  {samples.map((s) => <template data-x-item={`sample:${s.name}`} set:html={s.html} />)}
+
+  <script>
+    import '../../islands/playground';
+  </script>
+</Base>

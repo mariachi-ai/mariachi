@@ -1,0 +1,151 @@
+---
+import '../styles/explorer.css';
+import type { Heading } from '../data/schema';
+import { loadDesign } from '../loaders/design';
+import { currentRoute, SECTIONS, type SidebarGroup } from '../lib/nav';
+import { BASE, href } from '../lib/url';
+
+interface Props {
+  title: string;
+  description?: string;
+  sidebar?: SidebarGroup[];
+  toc?: Heading[];
+  /** Full-bleed main column (design samples, compare). */
+  wide?: boolean;
+  /** Excluded from search (index pages that only list other pages). */
+  noindex?: boolean;
+}
+
+const { title, description = 'Explore every Mariachi package, doc, API, error code and design component.', sidebar, toc, wide, noindex } = Astro.props;
+const route = currentRoute(Astro.url.pathname, BASE);
+const presets = loadDesign().presets;
+const version = loadDesign().version;
+const active = (match: string) => route === match || route.startsWith(`${match}/`);
+const pageTitle = route === '' ? 'Mariachi Explorer' : `${title} · Mariachi`;
+const tocItems = (toc ?? []).filter((h) => h.id);
+---
+
+<!doctype html>
+<html lang="en" data-theme="minimal" data-mode="auto">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href={href('favicon.svg')} type="image/svg+xml" />
+    <link rel="stylesheet" href={href('design.css')} />
+    <script is:inline>
+      // Restore the visitor's preset and mode before first paint.
+      (() => {
+        try {
+          const saved = JSON.parse(localStorage.getItem('mariachi-explorer') || '{}');
+          const root = document.documentElement;
+          if (saved.theme) root.dataset.theme = saved.theme;
+          if (saved.mode) root.dataset.mode = saved.mode;
+        } catch {}
+      })();
+    </script>
+  </head>
+  <body data-base={BASE}>
+    <a class="x-skip m-button" data-variant="primary" href="#main">Skip to content</a>
+    <header class="m-navbar x-header" data-sticky>
+      <a class="m-navbar-brand x-brand" href={href('')}>
+        <svg aria-hidden="true" viewBox="0 0 32 32" width="22" height="22"><use href={`${href('favicon.svg')}#mark`} /></svg>
+        <span>Mariachi</span>
+        <span class="m-badge" data-tone="neutral">v{version}</span>
+      </a>
+      <nav class="m-navbar-nav x-nav" aria-label="Main">
+        {
+          SECTIONS.map((s) => (
+            <a class="m-navbar-link" href={href(s.route)} aria-current={active(s.match) ? 'page' : undefined}>
+              {s.label}
+            </a>
+          ))
+        }
+      </nav>
+      <div class="m-navbar-actions x-actions">
+        <button type="button" class="m-button x-search-button" data-size="sm" id="x-search-open" aria-haspopup="dialog">
+          <span>Search</span>
+          <kbd class="m-kbd">⌘K</kbd>
+        </button>
+        <label class="m-sr-only" for="x-theme">Design preset</label>
+        <select class="m-select" data-size="sm" id="x-theme">
+          {presets.map((p) => <option value={p.name}>{p.label}</option>)}
+        </select>
+        <label class="m-sr-only" for="x-mode">Colour mode</label>
+        <select class="m-select" data-size="sm" id="x-mode">
+          <option value="auto">Auto</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
+    </header>
+
+    <div class="x-shell" data-sidebar={sidebar ? '' : undefined} data-toc={tocItems.length > 1 ? '' : undefined} data-wide={wide ? '' : undefined}>
+      {
+        sidebar && (
+          <details class="x-sidebar-toggle" open>
+            <summary class="m-button" data-variant="ghost" data-size="sm">Menu</summary>
+            <nav class="m-sidebar x-sidebar" aria-label="Section">
+              {sidebar.map((group) => (
+                <div class="m-sidebar-section">
+                  <div class="m-sidebar-heading">{group.heading}</div>
+                  <ul>
+                    {group.links.map((link) => (
+                      <li>
+                        <a class="m-sidebar-link" href={href(link.route)} aria-current={route === link.route ? 'page' : undefined}>
+                          <span>{link.label}</span>
+                          {link.badge && <span class="m-sidebar-count">{link.badge}</span>}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </nav>
+          </details>
+        )
+      }
+      <main id="main" class="x-main" data-pagefind-body={noindex ? undefined : ''}>
+        <slot />
+      </main>
+      {
+        tocItems.length > 1 && (
+          <aside class="x-toc" aria-label="On this page">
+            <div class="x-toc-heading">On this page</div>
+            <ul>
+              {tocItems.map((h) => (
+                <li data-depth={h.depth}>
+                  <a href={`#${h.id}`}>{h.text}</a>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        )
+      }
+    </div>
+
+    <footer class="x-footer">
+      <div class="m-container m-cluster" data-justify="between">
+        <span class="m-muted">Generated from the repo at build time · @mariachi/explorer {version}</span>
+        <span class="m-cluster" data-gap="4">
+          <a href={href('explorer.json')}>explorer.json</a>
+          <a href="https://github.com/mariachi-ai/mariachi">GitHub</a>
+        </span>
+      </div>
+    </footer>
+
+    <dialog class="m-dialog x-search" id="x-search" data-m-light-dismiss aria-label="Search">
+      <form method="dialog" class="x-search-form" role="search">
+        <label class="m-sr-only" for="x-search-input">Search the explorer</label>
+        <input class="m-input" id="x-search-input" type="search" placeholder="Search packages, symbols, error codes, docs, components…" autocomplete="off" />
+        <button type="submit" class="m-button" data-variant="ghost" data-size="sm" aria-label="Close search">Esc</button>
+      </form>
+      <div class="x-search-results" id="x-search-results" aria-live="polite"></div>
+    </dialog>
+
+    <script>
+      import '../islands/shell';
+    </script>
+  </body>
+</html>

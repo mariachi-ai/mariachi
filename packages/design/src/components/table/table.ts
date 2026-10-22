@@ -1,0 +1,53 @@
+import { defineComponent } from '../../contract/component';
+import { ref, t } from '../../contract/tokens';
+
+export const table = defineComponent({
+  name: 'table',
+  title: 'Table',
+  category: 'data',
+  description: 'Data table with header styling, row hover, striping, compact density, numeric columns and a scrolling wrapper.',
+  useWhen: 'Tabular data people compare across rows and columns. Use a list or cards for a handful of unrelated items.',
+  anatomy: {
+    '.m-table': 'On a <table> with <thead> and <tbody>',
+    '.m-table-wrap': 'Container that adds the border and scrolls wide tables horizontally',
+    '[data-striped]': 'Alternate row backgrounds',
+    '[data-density="compact"]': 'Tighter cell padding',
+    '[data-sticky]': 'Header stays visible while the wrapper scrolls vertically',
+    'td[data-numeric] / th[data-numeric]': 'Right-aligned, tabular figures',
+  },
+  tokens: {
+    bg: t.color('Body background', ref('color.bg.surface')),
+    fg: t.color('Cell text', ref('color.fg.default')),
+    fontSize: t.length('Cell text size', ref('font.size.sm')),
+    cellPaddingX: t.length('Cell horizontal padding', ref('space.3')),
+    cellPaddingY: t.length('Cell vertical padding', ref('space.2')),
+    compactPaddingX: t.length('Compact cell horizontal padding', ref('space.2')),
+    compactPaddingY: t.length('Compact cell vertical padding', ref('space.1')),
+    borderColor: t.color('Row divider colour', ref('color.border.default')),
+    borderWidth: t.length('Row divider width', ref('borderWidth.thin')),
+    headerBg: t.color('Header background', ref('color.bg.sunken')),
+    headerFg: t.color('Header text', ref('color.fg.muted')),
+    headerFontSize: t.length('Header text size', ref('font.size.xs')),
+    headerFontWeight: t.fontWeight('Header weight', ref('font.weight.semibold')),
+    headerTransform: t.keyword('Header text-transform', 'uppercase'),
+    headerTracking: t.length('Header letter spacing', ref('font.tracking.wide')),
+    rowHoverBg: t.color('Row background on hover', ref('color.bg.sunken')),
+    stripeBg: t.color('Striped row background', ref('color.bg.canvas')),
+    wrapBorder: t.color('Wrapper border', ref('color.border.default')),
+    wrapBorderWidth: t.length('Wrapper border width', ref('borderWidth.container')),
+    wrapRadius: t.length('Wrapper corner radius', ref('radius.container')),
+    wrapShadow: t.shadow('Wrapper shadow', 'none'),
+  },
+  contrast: [
+    { fg: 'fg', bg: 'bg', min: 4.5 },
+    { fg: 'fg', bg: 'rowHoverBg', min: 4.5 },
+    { fg: 'fg', bg: 'stripeBg', min: 4.5 },
+    { fg: 'headerFg', bg: 'headerBg', min: 4.5 },
+  ],
+  a11y: [
+    'Use real <th scope="col"> header cells (and scope="row" for row headers) so screen readers announce headers with each cell.',
+    'Give the table a <caption> (it can be .m-sr-only) or aria-labelledby that says what the data is.',
+    'Make .m-table-wrap focusable (tabindex="0", role="region", aria-label) when it scrolls, so keyboard users can scroll it.',
+    'Don\'t use tables for layout.',
+  ],
+});

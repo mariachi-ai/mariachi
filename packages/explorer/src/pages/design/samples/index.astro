@@ -1,0 +1,27 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { designSidebar } from '../../../lib/sidebars';
+import { href } from '../../../lib/url';
+import { loadDesign } from '../../../loaders/design';
+import { samples } from '../../../samples';
+
+const catalog = loadDesign();
+---
+
+<Base title="Sample pages" description="Whole pages built only from @mariachi/design components." sidebar={designSidebar(catalog)}>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Design</span>
+    <h1>Sample pages</h1>
+    <p class="x-lede">Judge a preset by a whole page, not a lone button. Each page uses only library components; switch the preset in the header.</p>
+  </header>
+  <div class="m-grid" style="--m-layout-grid-min: 18rem">
+    {
+      samples.map((s) => (
+        <a class="m-card x-card-link" data-interactive href={href(`design/samples/${s.name}`)}>
+          <div class="m-card-header"><div class="m-card-title">{s.title}</div></div>
+          <div class="m-card-body m-muted">{s.description}</div>
+        </a>
+      ))
+    }
+  </div>
+</Base>

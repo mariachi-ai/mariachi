@@ -1,0 +1,67 @@
+@layer mariachi.components {
+  .m-usage {
+    --_fill: var(--m-usage-ok-fill);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--m-usage-gap);
+    font-size: var(--m-usage-font-size);
+  }
+
+  .m-usage[data-level="warn"] {
+    --_fill: var(--m-usage-warn-fill);
+  }
+
+  .m-usage[data-level="over"] {
+    --_fill: var(--m-usage-over-fill);
+  }
+
+  .m-usage-header,
+  .m-usage-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--m-space-1) var(--m-space-3);
+  }
+
+  .m-usage-label {
+    color: var(--m-usage-label-fg);
+    font-weight: var(--m-usage-label-weight);
+  }
+
+  .m-usage-amount {
+    color: var(--m-usage-amount-fg);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .m-usage[data-level="over"] .m-usage-amount {
+    color: var(--m-usage-label-fg);
+    font-weight: var(--m-font-weight-semibold);
+  }
+
+  .m-usage-footer {
+    color: var(--m-usage-footer-fg);
+    font-size: var(--m-font-size-xs);
+  }
+
+  .m-usage-bar {
+    position: relative;
+    block-size: var(--m-usage-height);
+    overflow: hidden;
+    border: var(--m-usage-track-border-width) solid var(--m-usage-track-border);
+    border-radius: var(--m-usage-radius);
+    background: var(--m-usage-track);
+  }
+
+  .m-usage-bar::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: min(var(--m-usage-value), 100%);
+    border-radius: var(--m-usage-radius);
+    background: var(--_fill);
+    transition: inline-size var(--m-motion-duration-normal) var(--m-motion-easing-standard);
+  }
+}

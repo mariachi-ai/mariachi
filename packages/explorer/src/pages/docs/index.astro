@@ -1,0 +1,23 @@
+---
+import Base from '../../layouts/Base.astro';
+import { docsSidebar } from '../../lib/sidebars';
+import { href } from '../../lib/url';
+import { loadDocs } from '../../loaders/docs';
+
+const docs = await loadDocs();
+const readme = docs.find((d) => d.slug === '')!;
+---
+
+<Base title="Docs" description={readme.summary} sidebar={docsSidebar(docs)} toc={readme.headings}>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Docs</span>
+    <h1>{readme.title}</h1>
+  </header>
+  <article class="m-prose">
+    <Fragment set:html={readme.html} />
+  </article>
+  <p class="m-muted x-source-note">
+    Source: <a href={`https://github.com/mariachi-ai/mariachi/blob/main/${readme.file}`}>{readme.file}</a> · These docs also ship inside
+    <a href={href('packages/core')}>@mariachi/core</a>.
+  </p>
+</Base>

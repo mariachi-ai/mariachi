@@ -79,3 +79,20 @@ payloads (`defineEvent(name, { schema })`) and config. Inside the service layer,
 Construct infrastructure with factories and config (`createCache`, `createEventBus`, `createJobQueue`,
 `createPostgresDatabase`), not `new RedisCacheAdapter(...)`, so tests and local development can swap in
 memory adapters.
+
+## Design library
+
+These apply to `@mariachi/design` and to UI code that uses it. Backend rules (ctx first, procedures)
+don't apply to markup and CSS. See [design.md](./design.md).
+
+- Use catalog markup: `m-` classes, data attributes for options, HTML and ARIA for state. Don't invent
+  classes or restyle components with new selectors; override tokens instead.
+- Component CSS reads tokens only: no colour literals, and no raw values for radius, shadows or font
+  size. Custom properties are `--m-*` tokens or rule-private `--_*`. **(stylelint in `packages/design`)**
+- Every `var(--m-*)` names a token in the contract, and every component token is used. **(design tests)**
+- Every preset passes the contract's contrast pairs in both modes. **(design tests, `mariachi design check`)**
+- Each component folder has `<name>.ts`, `<name>.css` and `<name>.examples.ts`; the registry is
+  generated. **(lint: `generate-registry --check`)**
+- Override order: one token, one component, one area, `replace`, then a preset. Never fork a preset's
+  CSS.
+

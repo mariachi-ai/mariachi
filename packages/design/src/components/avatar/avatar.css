@@ -1,0 +1,50 @@
+@layer mariachi.components {
+  .m-avatar {
+    --_size: var(--m-avatar-size-md);
+
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: var(--_size);
+    block-size: var(--_size);
+    overflow: hidden;
+    border: var(--m-avatar-border-width) solid var(--m-avatar-border);
+    border-radius: var(--m-avatar-radius);
+    background: var(--m-avatar-bg);
+    color: var(--m-avatar-fg);
+    font-size: calc(var(--_size) * 0.38);
+    font-weight: var(--m-avatar-font-weight);
+    line-height: 1;
+    text-transform: uppercase;
+    vertical-align: middle;
+    object-fit: cover;
+    user-select: none;
+  }
+
+  .m-avatar > img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .m-avatar[data-size="sm"] {
+    --_size: var(--m-avatar-size-sm);
+  }
+
+  .m-avatar[data-size="lg"] {
+    --_size: var(--m-avatar-size-lg);
+  }
+
+  .m-avatar-group {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .m-avatar-group > .m-avatar {
+    box-shadow: 0 0 0 var(--m-avatar-ring-width) var(--m-avatar-ring-color);
+  }
+
+  .m-avatar-group > .m-avatar + .m-avatar {
+    margin-inline-start: var(--m-avatar-group-overlap);
+  }
+}

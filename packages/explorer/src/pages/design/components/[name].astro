@@ -1,0 +1,103 @@
+---
+import TableWrap from '../../../components/TableWrap.astro';
+import Code from '../../../components/Code.astro';
+import Example from '../../../components/Example.astro';
+import type { Heading } from '../../../data/schema';
+import Base from '../../../layouts/Base.astro';
+import { componentCategoryTitle, designSidebar } from '../../../lib/sidebars';
+import { href } from '../../../lib/url';
+import { loadDesign } from '../../../loaders/design';
+
+export function getStaticPaths() {
+  return loadDesign().components.map((c) => ({ params: { name: c.name } }));
+}
+
+const catalog = loadDesign();
+const component = catalog.components.find((c) => c.name === Astro.params.name)!;
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const toc: Heading[] = [
+  { depth: 2, id: 'examples', text: 'Examples' },
+  ...component.examples.map((e) => ({ depth: 3, id: `example-${slug(e.name)}`, text: e.name })),
+  { depth: 2, id: 'anatomy', text: 'Markup' },
+  { depth: 2, id: 'tokens', text: 'Tokens' },
+  { depth: 2, id: 'a11y', text: 'Accessibility' },
+  { depth: 2, id: 'import', text: 'Import' },
+];
+const show = (v: unknown) => (typeof v === 'string' ? v : v && typeof v === 'object' ? `${(v as { light: string }).light} / ${(v as { dark: string }).dark}` : '');
+const importCode = `import '@mariachi/design/base.css';\n${[...component.requires, component.name].map((n) => `import '@mariachi/design/components/${n}.css';`).join('\n')}`;
+const overrideCode = component.tokens[0] ? `/* Every ${component.title.toLowerCase()} in the app */\n:root { ${component.tokens[0].cssVar}: …; }\n\n/* Only inside one area */\n.settings .m-${component.name} { ${component.tokens[0].cssVar}: …; }` : '';
+---
+
+<Base title={component.title} description={component.description} sidebar={designSidebar(catalog)} toc={toc}>
+  <nav class="m-breadcrumb" aria-label="Breadcrumb">
+    <ol>
+      <li><a href={href('design')}>Design</a></li>
+      <li><a href={href('design/components')}>{componentCategoryTitle(component.category)}</a></li>
+      <li aria-current="page">{component.title}</li>
+    </ol>
+  </nav>
+  <header class="x-page-header">
+    <h1>{component.title}</h1>
+    <p class="x-lede">{component.description}</p>
+    <div class="x-meta">
+      <span><strong>Use when:</strong> {component.useWhen}</span>
+    </div>
+    <div class="m-cluster" data-gap="2">
+      <a class="m-button" data-size="sm" href={`${href('design/compare')}?item=${component.name}`}>Compare across presets</a>
+      <a class="m-button" data-size="sm" data-variant="ghost" href={`https://github.com/mariachi-ai/mariachi/tree/main/packages/design/src/components/${component.name}`}>Source</a>
+    </div>
+  </header>
+
+  <section class="x-section" id="examples">
+    <h2>Examples</h2>
+    <p class="m-muted">Rendered in the preset picked in the header.</p>
+    {component.examples.map((e) => <Example example={e} id={`example-${slug(e.name)}`} />)}
+  </section>
+
+  <section class="x-section" id="anatomy">
+    <h2>Markup</h2>
+    <TableWrap label="Markup">
+      <table class="m-table" data-density="compact">
+        <tbody>
+          {Object.entries(component.anatomy).map(([sel, desc]) => (
+            <tr><td><code class="m-code-inline">{sel}</code></td><td>{desc}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </TableWrap>
+    {component.requires.length > 0 && (
+      <p class="m-muted">
+        Needs: {component.requires.map((r, i) => (<>{i > 0 && ', '}<a href={href(`design/components/${r}`)}>{r}</a></>))}
+      </p>
+    )}
+  </section>
+
+  <section class="x-section" id="tokens">
+    <h2>Tokens</h2>
+    <p class="m-muted">Each defaults to a semantic token, so a preset or your app overrides only what should differ.</p>
+    {overrideCode && <Code code={overrideCode} lang="css" label="Override" />}
+    <TableWrap label="Tokens">
+      <table class="m-table" data-density="compact">
+        <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          {component.tokens.map((t) => (
+            <tr><td><code class="m-code-inline">{t.cssVar}</code></td><td class="x-mono">{show(t.default)}</td><td>{t.description}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </TableWrap>
+  </section>
+
+  <section class="x-section" id="a11y">
+    <h2>Accessibility</h2>
+    <ul class="m-prose">
+      {component.a11y.map((a) => <li>{a}</li>)}
+    </ul>
+  </section>
+
+  <section class="x-section" id="import">
+    <h2>Import</h2>
+    <Code code={importCode} lang="ts" label="Just this component" />
+    <p class="m-muted">Or set <code class="m-code-inline">include: ['{component.name}']</code> in <code class="m-code-inline">mariachi.design.ts</code>; dependencies are added for you.</p>
+  </section>
+</Base>

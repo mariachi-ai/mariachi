@@ -1,0 +1,96 @@
+@layer mariachi.components {
+  .m-card {
+    --_bg: var(--m-card-bg);
+    --_border: var(--m-card-border);
+    --_shadow: var(--m-card-shadow);
+    --_padding: var(--m-card-padding-md);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--m-card-gap);
+    padding: var(--_padding);
+    border: var(--m-card-border-width) solid var(--_border);
+    border-radius: var(--m-card-radius);
+    background: var(--_bg);
+    color: var(--m-card-fg);
+    box-shadow: var(--_shadow);
+    min-inline-size: 0;
+  }
+
+  .m-card[data-variant="outline"] {
+    --_bg: var(--m-card-outline-bg);
+    --_border: var(--m-card-outline-border);
+    --_shadow: none;
+  }
+
+  .m-card[data-variant="sunken"] {
+    --_bg: var(--m-card-sunken-bg);
+    --_border: var(--m-card-sunken-border);
+    --_shadow: none;
+  }
+
+  .m-card[data-size="sm"] {
+    --_padding: var(--m-card-padding-sm);
+  }
+
+  .m-card[data-size="lg"] {
+    --_padding: var(--m-card-padding-lg);
+  }
+
+  .m-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--m-space-2) var(--m-space-4);
+  }
+
+  .m-card-header > :first-child {
+    display: flex;
+    flex: 1 1 12rem;
+    flex-direction: column;
+    gap: var(--m-space-1);
+    min-inline-size: 0;
+  }
+
+  .m-card-title {
+    font-family: var(--m-card-title-family);
+    font-size: var(--m-card-title-size);
+    font-weight: var(--m-card-title-weight);
+  }
+
+  .m-card-description {
+    color: var(--m-card-description-fg);
+    font-size: var(--m-card-description-size);
+  }
+
+  .m-card-body {
+    min-inline-size: 0;
+  }
+
+  .m-card-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--m-space-2);
+  }
+
+  a.m-card,
+  .m-card[data-interactive] {
+    color: var(--m-card-fg);
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      box-shadow var(--m-motion-duration-normal) var(--m-motion-easing-standard),
+      border-color var(--m-motion-duration-normal) var(--m-motion-easing-standard),
+      transform var(--m-motion-duration-normal) var(--m-motion-easing-standard);
+  }
+
+  a.m-card:hover,
+  .m-card[data-interactive]:hover {
+    border-color: var(--m-card-hover-border);
+    box-shadow: var(--m-card-hover-shadow);
+    transform: var(--m-card-hover-transform);
+  }
+}

@@ -1,0 +1,27 @@
+---
+import type { ComponentExample } from '@mariachi/design';
+import { namespaceHtml } from '../lib/examples';
+import Code from './Code.astro';
+
+interface Props {
+  example: ComponentExample;
+  /** Anchor id for the example. */
+  id?: string;
+}
+const { example, id } = Astro.props;
+const rendered = namespaceHtml(example.html);
+---
+
+<section class="x-example" id={id}>
+  <div class="x-example-head">
+    <strong>{example.name}</strong>
+    {example.description && <span class="m-muted">{example.description}</span>}
+  </div>
+  <div class="x-example-stage" data-pagefind-ignore>
+    <Fragment set:html={rendered} />
+  </div>
+  <details class="x-example-code">
+    <summary>HTML</summary>
+    <Code code={example.html} lang="html" label={false} />
+  </details>
+</section>

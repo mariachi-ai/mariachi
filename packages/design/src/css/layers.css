@@ -1,0 +1,5 @@
+/*
+ * Layer order. Unlayered app CSS beats every layer; apps that use layers themselves can put their
+ * overrides in `mariachi.overrides`, which comes last.
+ */
+@layer mariachi.reset, mariachi.theme, mariachi.base, mariachi.components, mariachi.overrides;

@@ -1,0 +1,11 @@
+---
+/** A horizontally scrollable table region that keyboard users can focus and scroll (WCAG 2.1.1). */
+interface Props {
+  label: string;
+}
+const { label } = Astro.props;
+---
+
+<div class="m-table-wrap" tabindex="0" role="region" aria-label={label}>
+  <slot />
+</div>

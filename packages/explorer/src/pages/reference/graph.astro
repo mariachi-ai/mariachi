@@ -1,0 +1,41 @@
+---
+import TableWrap from '../../components/TableWrap.astro';
+import StatusBadge from '../../components/StatusBadge.astro';
+import Base from '../../layouts/Base.astro';
+import { referenceSidebar } from '../../lib/sidebars';
+import { href } from '../../lib/url';
+import { loadGraph } from '../../loaders/graph';
+import { loadPackages } from '../../loaders/packages';
+
+const [graph, packages] = await Promise.all([loadGraph(), loadPackages()]);
+const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+---
+
+<Base title="Dependency graph" description="How the @mariachi packages depend on each other." sidebar={referenceSidebar} wide>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Reference</span>
+    <h1>Dependency graph</h1>
+    <p class="x-lede">Solid arrows are dependencies; dashed arrows are peer dependencies (optional integrations). Grouped by catalog category.</p>
+  </header>
+  <pre class="mermaid" aria-label="Package dependency graph" set:html={escapeHtml(graph.mermaid)} />
+  <section class="x-section">
+    <h2>As a table</h2>
+    <TableWrap label="Package dependencies">
+      <table class="m-table" data-density="compact">
+        <thead><tr><th>Package</th><th>Status</th><th>Depends on</th><th>Used by</th></tr></thead>
+        <tbody>
+          {
+            packages.map((p) => (
+              <tr>
+                <td><a class="x-mono" href={href(`packages/${p.slug}`)}>{p.name.replace('@mariachi/', '')}</a></td>
+                <td><StatusBadge status={p.status} /></td>
+                <td class="m-muted">{p.dependencies.map((d) => d.replace('@mariachi/', '')).join(', ') || '—'}</td>
+                <td class="m-muted">{p.usedBy.map((d) => d.replace('@mariachi/', '')).join(', ') || '—'}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </TableWrap>
+  </section>
+</Base>
