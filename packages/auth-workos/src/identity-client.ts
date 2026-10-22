@@ -4,6 +4,9 @@ import type {
   AuthorizationUrlInput,
   CodeExchangeInput,
   CreateIdentityUserInput,
+  EmailCodeInput,
+  EmailDelivery,
+  VerifyEmailInput,
   IdentityClient,
   IdentityPendingReason,
   IdentityRequestContext,
@@ -294,13 +297,95 @@ export class WorkOSIdentityClient implements IdentityClient {
     }
   }
 
-  async sendPasswordReset(email: string): Promise<void> {
+  private get appSendsEmails(): boolean {
+    return (this.config.emailsSentBy ?? 'app') === 'app';
+  }
+
+  private async signedIn(call: () => Promise<AuthenticationResponse>, refused: 'auth/invalid-credentials' | 'auth/invalid-grant'): Promise<SignInResult> {
+    let res: AuthenticationResponse;
+    try {
+      res = await call();
+    } catch (error) {
+      return this.failure(error, refused);
+    }
+    return { status: 'signed-in', user: toUser(res.user), tokens: tokens(res) };
+  }
+
+  async sendPasswordReset(email: string): Promise<EmailDelivery<{ token: string; url?: string; expiresAt?: number }>> {
     const w = await this.client();
     try {
-      await w.userManagement.createPasswordReset({ email });
+      const reset = await w.userManagement.createPasswordReset({ email });
+      if (!this.appSendsEmails) return { deliveredBy: 'provider' };
+      return { deliveredBy: 'app', token: reset.passwordResetToken, url: reset.passwordResetUrl, expiresAt: Date.parse(reset.expiresAt) || undefined };
     } catch (error) {
-      if ((error as SdkError)?.status === 404) return; // No account: say nothing, as for one that exists.
+      if ((error as SdkError)?.status === 404) return { deliveredBy: 'nobody' }; // answered as for an account
       throw this.error(error, 'auth/invalid-grant');
     }
+  }
+
+  async resetPassword(input: { token: string; password: string }): Promise<IdentityUser> {
+    const w = await this.client();
+    try {
+      const { user } = await w.userManagement.resetPassword({ token: input.token, newPassword: input.password });
+      return toUser(user);
+    } catch (error) {
+      throw this.error(error, 'auth/invalid-grant');
+    }
+  }
+
+  async setPassword(userId: string, password: string): Promise<void> {
+    const w = await this.client();
+    try {
+      await w.userManagement.updateUser({ userId, password });
+    } catch (error) {
+      throw this.error(error, 'auth/invalid-grant');
+    }
+  }
+
+  async startEmailCode(email: string, context: IdentityRequestContext = {}): Promise<EmailDelivery<{ code: string; expiresAt?: number }>> {
+    const w = await this.client();
+    try {
+      const magic = await w.userManagement.createMagicAuth({ email, ipAddress: context.ipAddress, userAgent: context.userAgent });
+      if (!this.appSendsEmails) return { deliveredBy: 'provider' };
+      return { deliveredBy: 'app', code: magic.code, expiresAt: Date.parse(magic.expiresAt) || undefined };
+    } catch (error) {
+      throw this.error(error, 'auth/invalid-grant');
+    }
+  }
+
+  async signInWithEmailCode(input: EmailCodeInput): Promise<SignInResult> {
+    const w = await this.client();
+    return this.signedIn(
+      () => w.userManagement.authenticateWithMagicAuth({ clientId: this.config.clientId, email: input.email, code: input.code, ipAddress: input.ipAddress, userAgent: input.userAgent }),
+      'auth/invalid-grant',
+    );
+  }
+
+  async pendingVerificationCode(pending: Extract<SignInResult, { status: 'pending' }>): Promise<string> {
+    const id = pending.providerData?.emailVerificationId;
+    if (pending.reason !== 'email-verification' || !id) {
+      throw new AuthError('auth/not-supported', 'No email verification is pending for this sign-in');
+    }
+    const w = await this.client();
+    try {
+      return (await w.userManagement.getEmailVerification(id)).code;
+    } catch (error) {
+      throw this.error(error, 'auth/invalid-grant');
+    }
+  }
+
+  async verifyEmailAndSignIn(input: VerifyEmailInput): Promise<SignInResult> {
+    const w = await this.client();
+    return this.signedIn(
+      () =>
+        w.userManagement.authenticateWithEmailVerification({
+          clientId: this.config.clientId,
+          code: input.code,
+          pendingAuthenticationToken: input.pendingToken,
+          ipAddress: input.ipAddress,
+          userAgent: input.userAgent,
+        }),
+      'auth/invalid-grant',
+    );
   }
 }

@@ -173,12 +173,34 @@ describe('FusionAuthIdentityClient', () => {
     expect(calls.at(-1)).toMatchObject({ method: 'DELETE', url: 'https://auth.example.org/api/user/fa-user-1?hardDelete=true' });
   });
 
-  it('starts a password reset and says nothing for an unknown address', async () => {
+  it('starts a password reset (FusionAuth sends it) and says nothing for an unknown address', async () => {
     const { client, calls } = fakeFetch(() => ({ status: 404 }));
-    await expect(client.sendPasswordReset('nobody@example.org')).resolves.toBeUndefined();
+    expect(await client.sendPasswordReset('nobody@example.org')).toEqual({ deliveredBy: 'nobody' });
     expect(JSON.parse(calls[0]!.body!)).toEqual({ loginId: 'nobody@example.org', applicationId: 'app-1', sendForgotPasswordEmail: true });
+    expect(await fakeFetch(() => ({ status: 200 })).client.sendPasswordReset('ada@example.org')).toEqual({ deliveredBy: 'provider' });
     const unset = fakeFetch(() => ({ status: 403 }));
     await expect(unset.client.sendPasswordReset('ada@example.org')).rejects.toMatchObject({ code: 'auth/not-supported' });
+  });
+
+  it('passwordless: the app gets the code, and the code signs in through the Login API', async () => {
+    const { client, calls } = fakeFetch((c) => (c.url.endsWith('/api/passwordless/start') ? { status: 200, body: { code: 'pl-code' } } : { status: 200, body: { token: ACCESS, refreshToken: 'rt-1', user: faUser() } }));
+    expect(await client.startEmailCode('ada@example.org')).toEqual({ deliveredBy: 'app', code: 'pl-code' });
+    expect(JSON.parse(calls[0]!.body!)).toEqual({ loginId: 'ada@example.org', applicationId: 'app-1' });
+    const out = await client.signInWithEmailCode({ email: 'ada@example.org', code: 'pl-code' });
+    expect(out).toMatchObject({ status: 'signed-in', user: { id: 'fa-user-1' } });
+    expect(calls[1]!.url).toBe('https://auth.example.org/api/passwordless/login');
+    const wrong = fakeFetch(() => ({ status: 404 }));
+    await expect(wrong.client.signInWithEmailCode({ email: 'a@x', code: 'nope' })).rejects.toMatchObject({ code: 'auth/invalid-grant' });
+  });
+
+  it('sets a password through the User API; held sign-ins and app-side resets are FusionAuth\'s own', async () => {
+    const { client, calls } = fakeFetch(() => ({ status: 200, body: { user: faUser() } }));
+    await client.setPassword('fa-user-1', 'pw-2');
+    expect(calls[0]).toMatchObject({ method: 'PATCH', url: 'https://auth.example.org/api/user/fa-user-1' });
+    expect(JSON.parse(calls[0]!.body!)).toEqual({ user: { password: 'pw-2' } });
+    await expect(client.resetPassword()).rejects.toMatchObject({ code: 'auth/not-supported' });
+    await expect(client.pendingVerificationCode()).rejects.toMatchObject({ code: 'auth/not-supported' });
+    await expect(client.verifyEmailAndSignIn()).rejects.toMatchObject({ code: 'auth/not-supported' });
   });
 
   it('reports an unreachable FusionAuth as an identity-provider error', async () => {

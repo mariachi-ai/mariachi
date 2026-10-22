@@ -69,6 +69,7 @@ beforeAll(async () => {
       name: 'mariachi identity client',
       tenantId,
       loginConfiguration: { generateRefreshTokens: true },
+      passwordlessConfiguration: { enabled: true },
       oauthConfiguration: { clientSecret, authorizedRedirectURLs: ['http://127.0.0.1/cb'], enabledGrants: ['authorization_code', 'refresh_token'] },
     },
   });
@@ -131,6 +132,24 @@ describe('FusionAuthIdentityClient against FusionAuth', () => {
     await client.deleteUser(user.id);
     expect(await client.getUser(user.id)).toBeNull();
     expect(await client.findUserByEmail(addr)).toBeNull();
+  });
+
+  it('sets a password through the User API: the new one works, the old one does not', async () => {
+    const addr = email('setpw');
+    const user = await client.createUser({ email: addr, emailVerified: true, password: PASSWORD });
+    await client.setPassword(user.id, 'another-long-password-2');
+    expect((await client.signInWithPassword({ email: addr, password: 'another-long-password-2' })).status).toBe('signed-in');
+    await expect(client.signInWithPassword({ email: addr, password: PASSWORD })).rejects.toMatchObject({ code: 'auth/invalid-credentials' });
+  });
+
+  it('passwordless: the app gets a code, and the code signs in once', async () => {
+    const addr = email('pl');
+    const user = await client.createUser({ email: addr, emailVerified: true, password: PASSWORD });
+    const start = await client.startEmailCode(addr);
+    if (start.deliveredBy !== 'app') throw new Error(`expected the app to send the code, got ${start.deliveredBy}`);
+    const out = await client.signInWithEmailCode({ email: addr, code: start.code });
+    expect(out.status === 'signed-in' && out.user.id).toBe(user.id);
+    await expect(client.signInWithEmailCode({ email: addr, code: start.code })).rejects.toMatchObject({ code: 'auth/invalid-grant' });
   });
 
   it('says plainly when the tenant has no forgot-password email set up', async () => {
