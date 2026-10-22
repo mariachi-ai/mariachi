@@ -1,0 +1,61 @@
+{
+  "name": "@mariachi/auth-workos",
+  "version": "0.0.5",
+  "description": "WorkOS (AuthKit) JWT verification through its JWKS, signed webhooks, and an IdentityClient for headless sign-in.",
+  "mariachi": {
+    "category": "security",
+    "status": "alpha",
+    "useWhen": "Using WorkOS AuthKit as the identity provider",
+    "entry": [
+      "createWorkOSAuth",
+      "WorkOSWebhookHandler",
+      "createWorkOSIdentityClient"
+    ]
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "lint": "biome lint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@mariachi/auth": "workspace:*",
+    "@mariachi/core": "workspace:*",
+    "jose": "^6"
+  },
+  "peerDependencies": {
+    "@workos-inc/node": "^11"
+  },
+  "peerDependenciesMeta": {
+    "@workos-inc/node": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@workos-inc/node": "^11",
+    "typescript": "^5.7",
+    "tsup": "^8",
+    "vitest": "^3"
+  }
+}

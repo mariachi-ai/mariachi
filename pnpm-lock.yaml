@@ -516,6 +516,31 @@ importers:
         specifier: ^3
         version: 3.2.4(@types/node@22.19.11)(jiti@2.7.0)(yaml@2.9.1)
 
+  packages/auth-workos:
+    dependencies:
+      '@mariachi/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@mariachi/core':
+        specifier: workspace:*
+        version: link:../core
+      jose:
+        specifier: ^6
+        version: 6.2.1
+    devDependencies:
+      '@workos-inc/node':
+        specifier: ^11
+        version: 11.0.0
+      tsup:
+        specifier: ^8
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.9.1)
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+      vitest:
+        specifier: ^3
+        version: 3.2.4(@types/node@22.19.11)(jiti@2.7.0)(yaml@2.9.1)
+
   packages/billing:
     dependencies:
       '@mariachi/core':
@@ -3304,6 +3329,10 @@ packages:
 
   '@workflow/serde@4.1.0':
     resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
+
+  '@workos-inc/node@11.0.0':
+    resolution: {integrity: sha512-swUT6CbkuVQXMOtUpI70LZ8usjSg8OXcKMjKdoYLeqCApRI0Oo97l+nZ0lKzZ5GxjxgcVZGGVK025h7z9WyCJg==}
+    engines: {node: '>=22.11.0'}
 
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
@@ -8210,6 +8239,8 @@ snapshots:
       tinyrainbow: 2.0.0
 
   '@workflow/serde@4.1.0': {}
+
+  '@workos-inc/node@11.0.0': {}
 
   abort-controller@3.0.0:
     dependencies:

@@ -1,13 +1,14 @@
 # Auth and Provider Packages
 
-How `@mariachi/auth`, `@mariachi/auth-clerk`, `@mariachi/auth-fusionauth`, and `@mariachi/auth-gotrue` work together for authentication and multi-tenant identity.
+How `@mariachi/auth`, `@mariachi/auth-clerk`, `@mariachi/auth-fusionauth`, `@mariachi/auth-gotrue` and `@mariachi/auth-workos` work together for authentication and multi-tenant identity.
 
 ## Contract, not tight coupling
 
 They are **loosely coupled** through a shared contract defined in `@mariachi/auth`:
 
 - **`ResolvedIdentity`** — Every provider returns the same shape: `userId`, `tenantId`, `scopes`, `identityType`, and optional `sessionId` / `apiKeyId`.
-- **`AuthProvider`** — Third-party providers (Clerk, FusionAuth, GoTrue) implement: `verify(token) → Promise<ResolvedIdentity>` and `createWebhookHandler(config) → AuthWebhookHandler`.
+- **`AuthProvider`** — Third-party providers (Clerk, FusionAuth, GoTrue, WorkOS) implement: `verify(token) → Promise<ResolvedIdentity>` and `createWebhookHandler(config) → AuthWebhookHandler`.
+- **`IdentityClient`** (optional) — Providers whose sign-in your backend drives itself implement it too: password sign-in, the social sign-in redirect and code exchange, refresh, sign-out and user lookups. See [Headless sign-in](#headless-sign-in-identityclient).
 
 The core auth package does **not** import or depend on auth-clerk, auth-fusionauth or auth-gotrue. The provider packages depend only on `@mariachi/auth` (and `@mariachi/core`) for types and interfaces. Your app wires the chosen provider into the same middleware and context flow.
 
@@ -20,6 +21,7 @@ Multi-tenant auth is consistent because every provider maps its own concepts int
 | **Clerk** | `org_id` → `tenantId`         | `org_role` → `scopes` |
 | **FusionAuth** | `applicationId` → `tenantId` | `roles[]` → `scopes`   |
 | **GoTrue** | `org_id` (configurable, added by a custom access-token hook) → `tenantId` | `role`, `roles[]`, `org_role` → `roles`; those plus `scope` → `scopes` |
+| **WorkOS** | `org_id` → `tenantId` | `role`/`roles` → `roles`, `permissions` → `scopes` |
 | **JWT** (core) | `tenantId` claim            | Custom claims / `scopes` |
 
 After verification, the rest of the stack (controllers, services, RBAC, tenancy) only sees `ctx.userId`, `ctx.tenantId`, and `ctx.scopes`. Authorization (`AuthorizationAdapter`) is tenant-aware: `grant(userId, role, tenantId)` and `can(identity, action, resource)` use `identity.tenantId` so roles are per-tenant.
@@ -44,12 +46,41 @@ After verification, the rest of the stack (controllers, services, RBAC, tenancy)
 |--------|------|
 | **`@mariachi/auth`** | Defines `ResolvedIdentity`, `AuthenticationAdapter`, `AuthProvider`, `AuthWebhookHandler`; provides `createAuth` (JWT, API key), `createAuthMiddleware`, `createAuthWebhookDispatcher`, RBAC. No dependency on any specific IdP. |
 | **`@mariachi/auth-clerk`** | Implements `AuthProvider`: verifies Clerk JWTs, maps `org_id` → `tenantId`, `org_role` → scopes; provides `createClerkAuth()`, `createClerkMiddleware(provider)`, Clerk webhook handler and controller. |
-| **`@mariachi/auth-fusionauth`** | Implements `AuthProvider`: verifies FusionAuth JWTs via JWKS, maps `applicationId` → `tenantId`, `roles` → scopes; provides `createFusionAuthAuth()`, `FusionAuthWebhookHandler` (sync verify with HMAC or PEM). |
+| **`@mariachi/auth-fusionauth`** | Implements `AuthProvider`: verifies FusionAuth JWTs via JWKS, maps `applicationId` → `tenantId`, `roles` → scopes; provides `createFusionAuthAuth()`, `FusionAuthWebhookHandler` (sync verify with HMAC or PEM). Implements `IdentityClient` (`createFusionAuthIdentityClient()`) on the Login, OAuth and User APIs, with `fusionAuthEmailVouched()` deciding `emailVerified`. |
 | **`@mariachi/auth-gotrue`** | Implements `AuthProvider` for GoTrue (Supabase Auth, and Ensemble's per-app auth): verifies access tokens against GoTrue's JWKS (ES256 by default, never HMAC) with issuer and audience (`authenticated`), maps `sub` → `userId`, `session_id` → `sessionId`, the org claim → `tenantId`, `role`/`roles`/`org_role` → `roles` and `scopes`, and keeps the whole payload (`aal`, `amr`, `act`, `is_anonymous`, …) in `claims`; a short JWKS cache (60 s) so a rotated-out key stops verifying. Provides `createGoTrueAuth()` and `GoTrueWebhookHandler` for GoTrue's HTTP hooks (Standard Webhooks: `webhook-id`, `webhook-timestamp`, `webhook-signature`, secret `v1,whsec_…`), normalized to `AUTH_EVENT_TYPES`. Set `GOTRUE_JWT_ISSUER` on GoTrue: it omits `iss` otherwise. An app that reaches GoTrue on an internal address (an Ensemble preview: `http://127.0.0.1:9999`) passes `discoverIssuer: true` to read the issuer from GoTrue's `/.well-known/openid-configuration`, re-read with the JWKS. |
+| **`@mariachi/auth-workos`** | Implements `AuthProvider`: verifies WorkOS AuthKit JWTs via JWKS (issuer and `client_id` checked; `audience` for tokens AuthKit issues as an OAuth server, e.g. MCP), maps `org_id` → `tenantId`, `permissions` → scopes; `WorkOSWebhookHandler` verifies `WorkOS-Signature`. Implements `IdentityClient` (`createWorkOSIdentityClient()`) on `@workos-inc/node`, an optional peer loaded on first use. |
+
+## Headless sign-in: `IdentityClient`
+
+`AuthProvider` checks the tokens a provider issues. `IdentityClient` asks the provider for them, for apps whose own pages and backend drive sign-in (no hosted login page):
+
+```ts
+import { createWorkOSIdentityClient } from '@mariachi/auth-workos';
+// or: import { createFusionAuthIdentityClient } from '@mariachi/auth-fusionauth';
+
+const identity = createWorkOSIdentityClient({ apiKey, clientId });
+
+const result = await identity.signInWithPassword({ email, password, ipAddress, userAgent });
+if (result.status === 'pending') {
+  // e.g. 'email-verification': send the code yourself (WorkOS: providerData.emailVerificationId)
+} else {
+  // result.user.emailVerified decides account linking; result.tokens go into an HttpOnly cookie
+}
+
+const url = identity.authorizationUrl({ provider: 'google', redirectUri, state, codeChallenge });
+const signedIn = await identity.exchangeCode({ code, codeVerifier, redirectUri });
+const tokens = await identity.refresh(refreshToken);
+await identity.signOut({ sessionId: tokens.sessionId, refreshToken });
+```
+
+- **Same shape for every provider**, so an app moves its handlers onto `IdentityClient` on one provider and then switches providers by configuration.
+- **`emailVerified` is the provider's own answer** to "does this person control this inbox", never a flag that is true for everyone. Link accounts by email and accept invitations only when it's true.
+- **Errors** are `AuthError`s: `auth/invalid-credentials`, `auth/invalid-grant` (a refused code, verifier or refresh token), `auth/rate-limited`, `auth/not-supported`, `auth/identity-provider` (unreachable or unexpected).
+- **Server-side only**: the client holds the provider's API key or client secret.
 
 ## Webhooks
 
-- **Auth webhook flow** — `createAuthWebhookDispatcher` (from `@mariachi/auth`) takes any `AuthWebhookHandler`. Clerk, FusionAuth and GoTrue each provide a handler via `provider.createWebhookHandler({ secret })`. The dispatcher verifies the webhook (using the handler), normalizes the event to `AuthWebhookEvent`, and calls communication procedures (e.g. `auth.user.created`). Same flow for every provider; only the verification and event parsing are provider-specific.
+- **Auth webhook flow** — `createAuthWebhookDispatcher` (from `@mariachi/auth`) takes any `AuthWebhookHandler`. Clerk, FusionAuth, GoTrue and WorkOS each provide a handler via `provider.createWebhookHandler({ secret })`. The dispatcher verifies the webhook (using the handler), normalizes the event to `AuthWebhookEvent`, and calls communication procedures (e.g. `auth.user.created`). Same flow for every provider; only the verification and event parsing are provider-specific.
 
 ## Authorization (RBAC)
 

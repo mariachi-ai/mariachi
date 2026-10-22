@@ -1,14 +1,15 @@
 {
   "name": "@mariachi/auth-fusionauth",
   "version": "0.0.5",
-  "description": "FusionAuth JWT verification (JWKS) and webhook verification.",
+  "description": "FusionAuth JWT verification (JWKS), webhook verification, and an IdentityClient for headless sign-in.",
   "mariachi": {
     "category": "security",
     "status": "alpha",
     "useWhen": "Using FusionAuth as the identity provider",
     "entry": [
       "createFusionAuthAuth",
-      "FusionAuthWebhookHandler"
+      "FusionAuthWebhookHandler",
+      "createFusionAuthIdentityClient"
     ]
   },
   "type": "module",
