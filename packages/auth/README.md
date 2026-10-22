@@ -2,8 +2,8 @@
 
 Authentication and authorization: JWT and OAuth (PKCE), sessions, API keys with scopes and
 rotation, database-backed RBAC with caching, brute-force protection, and a dispatcher for identity
-provider webhooks. Provider packages (`@mariachi/auth-clerk`, `@mariachi/auth-fusionauth`)
-implement its contracts.
+provider webhooks. Provider packages (`@mariachi/auth-clerk`, `@mariachi/auth-fusionauth`,
+`@mariachi/auth-workos`) implement its contracts.
 
 **Status: beta.** Covered by unit tests and Postgres integration tests. The API can change before 1.0.
 
@@ -28,6 +28,7 @@ Guide: [auth-and-providers.md](../core/docs/auth-and-providers.md)
 | `ApiKeyService` | `issue`, `verify`, `rotate`, `revoke` over `DrizzleApiKeyStore` or `MemoryApiKeyStore` |
 | `createAuthWebhookDispatcher` | Verified, deduplicated provider webhooks to communication procedures |
 | `OAuthAdapter`, `BruteForceProtector`, `createAuthMiddleware` | OAuth flows, lockouts, middleware |
+| `AuthProvider`, `IdentityClient` (types) | What provider packages implement: token checks and webhooks; headless sign-in, refresh, sign-out and user lookups |
 
 ## Config
 

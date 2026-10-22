@@ -51,8 +51,9 @@
 | --- | --- | --- | --- | --- |
 | [`@mariachi/auth`](../../auth/README.md) | beta | JWT, OAuth, sessions, API keys with rotation and scopes, database-backed RBAC and brute-force protection. | Authenticating callers and checking permissions | `createAuth`, `createAuthorization`, `ApiKeyService`, `DrizzleRoleStore`, `JWTAdapter` |
 | `@mariachi/auth-clerk` | alpha | Clerk token verification and Svix-signed webhooks. | Using Clerk as the identity provider | `createClerkAuth`, `ClerkWebhookController` |
-| `@mariachi/auth-fusionauth` | alpha | FusionAuth JWT verification (JWKS) and webhook verification. | Using FusionAuth as the identity provider | `createFusionAuthAuth`, `FusionAuthWebhookHandler` |
+| `@mariachi/auth-fusionauth` | alpha | FusionAuth JWT verification (JWKS), webhook verification, and an IdentityClient for headless sign-in. | Using FusionAuth as the identity provider | `createFusionAuthAuth`, `FusionAuthWebhookHandler`, `createFusionAuthIdentityClient` |
 | `@mariachi/auth-gotrue` | alpha | GoTrue (Supabase Auth) JWT verification through its JWKS (ES256), and its signed hooks (Standard Webhooks). | Using GoTrue (Supabase Auth, or Ensemble's per-app auth) as the identity provider | `createGoTrueAuth`, `GoTrueWebhookHandler` |
+| `@mariachi/auth-workos` | alpha | WorkOS (AuthKit) JWT verification through its JWKS, signed webhooks, and an IdentityClient for headless sign-in. | Using WorkOS AuthKit as the identity provider | `createWorkOSAuth`, `WorkOSWebhookHandler`, `createWorkOSIdentityClient` |
 | [`@mariachi/rate-limit`](../../rate-limit/README.md) | beta | Rate limiting on Redis or memory: sliding window, fixed window and token bucket, with per-tenant tiers. | Throttling callers (api-facade wires it per route) or metering per-tenant quotas | `createRateLimiter`, `DefaultRateLimiting` |
 | `@mariachi/tenancy` | beta | Tenant resolution (subdomain, header, token) that fails closed. | Multi-tenant apps resolving the tenant per request | `createTenancy`, `createTenantResolver`, `createTenancyMiddleware` |
 

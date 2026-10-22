@@ -24,6 +24,21 @@ export type {
 
 export type { AuthProvider, AuthProviderWebhookConfig } from './provider';
 
+export type {
+  IdentityClient,
+  IdentityUser,
+  IdentityOAuthProvider,
+  IdentityPendingReason,
+  IdentityRequestContext,
+  TokenSet,
+  SignInResult,
+  PasswordSignInInput,
+  AuthorizationUrlInput,
+  CodeExchangeInput,
+  SignOutInput,
+  CreateIdentityUserInput,
+} from './identity';
+
 export type { AuthWebhookHandler, AuthWebhookEvent, AuthEventType } from './webhooks/types';
 export { AUTH_EVENT_TYPES } from './webhooks/types';
 
