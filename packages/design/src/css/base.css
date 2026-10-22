@@ -1,0 +1,101 @@
+@layer mariachi.base {
+  /* The element carrying data-theme paints its own canvas, so nested themes work. */
+  [data-theme] {
+    background-color: var(--m-color-bg-canvas);
+    color: var(--m-color-fg-default);
+    font-family: var(--m-font-body-family);
+    font-size: var(--m-font-size-md);
+    font-weight: var(--m-font-body-weight);
+    line-height: var(--m-font-leading-normal);
+    accent-color: var(--m-color-accent-default);
+  }
+
+  ::selection {
+    background-color: var(--m-color-selection-bg);
+    color: var(--m-color-selection-fg);
+  }
+
+  :focus-visible {
+    outline: var(--m-focus-width) var(--m-focus-style) var(--m-focus-color);
+    outline-offset: var(--m-focus-offset);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--m-font-heading-family);
+    font-weight: var(--m-font-heading-weight);
+    letter-spacing: var(--m-font-heading-tracking);
+    line-height: var(--m-font-leading-tight);
+    text-transform: var(--m-font-heading-transform);
+  }
+
+  h1 {
+    font-size: var(--m-font-size-4xl);
+  }
+
+  h2 {
+    font-size: var(--m-font-size-3xl);
+  }
+
+  h3 {
+    font-size: var(--m-font-size-2xl);
+  }
+
+  h4 {
+    font-size: var(--m-font-size-xl);
+  }
+
+  h5 {
+    font-size: var(--m-font-size-lg);
+  }
+
+  h6 {
+    font-size: var(--m-font-size-md);
+  }
+
+  a {
+    color: var(--m-color-accent-text);
+    text-underline-offset: 0.2em;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--m-font-family-mono);
+    font-size: 0.9em;
+  }
+
+  small {
+    font-size: var(--m-font-size-sm);
+  }
+
+  hr {
+    border: 0;
+    border-block-start: var(--m-border-width-thin) solid var(--m-color-border-default);
+  }
+
+  .m-sr-only {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .m-muted {
+    color: var(--m-color-fg-muted);
+  }
+
+  .m-subtle {
+    color: var(--m-color-fg-subtle);
+  }
+}

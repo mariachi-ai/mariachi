@@ -1,0 +1,54 @@
+@layer mariachi.components {
+  .m-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--m-field-gap);
+    min-inline-size: 0;
+  }
+
+  .m-field[data-layout="inline"] {
+    flex-direction: row;
+    align-items: center;
+
+    /* Rows stay at least one target tall, so checkboxes and radios keep a 24px pitch at any density. */
+    min-block-size: var(--m-control-min-target);
+    gap: var(--m-field-inline-gap);
+    color: var(--m-field-label-fg);
+    font-size: var(--m-field-label-font-size);
+    cursor: pointer;
+  }
+
+  .m-field[data-layout="inline"]:has(:disabled) {
+    cursor: not-allowed;
+  }
+
+  .m-field-label {
+    color: var(--m-field-label-fg);
+    font-size: var(--m-field-label-font-size);
+    font-weight: var(--m-field-label-font-weight);
+    letter-spacing: var(--m-field-label-tracking);
+    text-transform: var(--m-field-label-transform);
+    line-height: var(--m-font-leading-tight);
+  }
+
+  .m-field:has(:required) > .m-field-label::after,
+  .m-field-label[data-required]::after {
+    content: var(--m-field-required-marker);
+    color: var(--m-field-required-fg);
+  }
+
+  .m-field-hint,
+  .m-field-error {
+    font-size: var(--m-field-hint-font-size);
+    line-height: var(--m-font-leading-normal);
+  }
+
+  .m-field-hint {
+    color: var(--m-field-hint-fg);
+  }
+
+  .m-field-error {
+    color: var(--m-field-error-fg);
+    font-weight: var(--m-field-error-font-weight);
+  }
+}

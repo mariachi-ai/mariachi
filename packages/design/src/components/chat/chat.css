@@ -1,0 +1,148 @@
+@layer mariachi.components {
+  .m-chat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--m-chat-gap);
+    max-inline-size: var(--m-chat-max-width);
+  }
+
+  .m-message {
+    --_bg: var(--m-chat-assistant-bg);
+    --_fg: var(--m-chat-assistant-fg);
+    --_border: var(--m-chat-assistant-border);
+
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    column-gap: var(--m-space-3);
+    row-gap: var(--m-space-1);
+  }
+
+  .m-message > * {
+    grid-column: 2;
+  }
+
+  .m-message > .m-message-avatar {
+    grid-row: 1 / span 3;
+    grid-column: 1;
+  }
+
+  .m-message[data-role="user"] {
+    --_bg: var(--m-chat-user-bg);
+    --_fg: var(--m-chat-user-fg);
+    --_border: var(--m-chat-user-border);
+  }
+
+  .m-message-avatar {
+    display: grid;
+    place-items: center;
+    inline-size: var(--m-chat-avatar-size);
+    block-size: var(--m-chat-avatar-size);
+    overflow: hidden;
+    border-radius: var(--m-chat-avatar-radius);
+    background: var(--m-chat-avatar-bg);
+    color: var(--m-chat-avatar-fg);
+    font-size: var(--m-chat-meta-font-size);
+    font-weight: var(--m-font-weight-semibold);
+  }
+
+  .m-message[data-role="assistant"] > .m-message-avatar {
+    background: var(--m-chat-assistant-avatar-bg);
+    color: var(--m-chat-assistant-avatar-fg);
+  }
+
+  .m-message-avatar > img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .m-message-body {
+    justify-self: start;
+    max-inline-size: var(--m-chat-bubble-max-width);
+    padding: var(--m-chat-padding) var(--m-chat-padding-x);
+    border: var(--m-chat-border-width) solid var(--_border);
+    border-radius: var(--m-chat-radius);
+    background: var(--_bg);
+    color: var(--_fg);
+    overflow-wrap: break-word;
+  }
+
+  .m-message-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--m-space-2);
+    color: var(--m-chat-meta-fg);
+    font-size: var(--m-chat-meta-font-size);
+  }
+
+  .m-message-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--m-space-1);
+  }
+
+  /* Bubble variant: user messages sit on the right. */
+  .m-chat:not([data-variant="flat"]) .m-message[data-role="user"] {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .m-chat:not([data-variant="flat"]) .m-message[data-role="user"] > * {
+    grid-column: 1;
+    justify-self: end;
+  }
+
+  .m-chat:not([data-variant="flat"]) .m-message[data-role="user"] > .m-message-avatar {
+    grid-column: 2;
+  }
+
+  /* Flat variant: assistant replies are plain text, user turns get a tinted panel. */
+  .m-chat[data-variant="flat"] .m-message-body {
+    justify-self: stretch;
+    max-inline-size: none;
+  }
+
+  .m-chat[data-variant="flat"] .m-message:not([data-role="user"]) > .m-message-body {
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  /* System and tool messages: no bubble, no avatar column. */
+  .m-message:is([data-role="system"], [data-role="tool"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .m-message:is([data-role="system"], [data-role="tool"]) > * {
+    grid-column: 1;
+  }
+
+  .m-message:is([data-role="system"], [data-role="tool"]) > .m-message-body {
+    justify-self: stretch;
+    max-inline-size: none;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  .m-message[data-role="system"] > .m-message-body {
+    justify-self: center;
+    color: var(--m-chat-system-fg);
+    font-size: var(--m-chat-system-font-size);
+    text-align: center;
+  }
+
+  /* Streaming caret: after plain text, or after the last block of a prose reply. */
+  .m-message-body[data-streaming]:not(:has(> *))::after,
+  .m-message-body[data-streaming] > :last-child:not(.m-prose)::after,
+  .m-message-body[data-streaming] > .m-prose > :last-child::after {
+    content: "";
+    display: inline-block;
+    inline-size: var(--m-chat-caret-width);
+    block-size: 1em;
+    margin-inline-start: 0.15em;
+    background: var(--m-chat-caret-color);
+    vertical-align: text-bottom;
+    animation: m-blink var(--m-chat-caret-duration) steps(1) infinite;
+  }
+}

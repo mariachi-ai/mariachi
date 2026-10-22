@@ -1,0 +1,73 @@
+---
+import TableWrap from '../../components/TableWrap.astro';
+import Code from '../../components/Code.astro';
+import type { CliCommand, Heading } from '../../data/schema';
+import Base from '../../layouts/Base.astro';
+import { referenceSidebar } from '../../lib/sidebars';
+import { href } from '../../lib/url';
+import { loadCli } from '../../loaders/cli';
+
+const cli = await loadCli();
+const flatten = (c: CliCommand): CliCommand[] => [c, ...c.subcommands.flatMap(flatten)];
+const commands = cli.subcommands.flatMap(flatten);
+const id = (c: CliCommand) => c.path.replace(/\s+/g, '-');
+const toc: Heading[] = commands.map((c) => ({ depth: c.path.split(' ').length > 2 ? 3 : 2, id: id(c), text: c.path.replace(/^mariachi /, '') }));
+---
+
+<Base title="CLI" description="Every mariachi command, argument and option, read from the CLI's own definitions." sidebar={referenceSidebar} toc={toc}>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Reference</span>
+    <h1>The <code class="m-code-inline">mariachi</code> CLI</h1>
+    <p class="x-lede">{cli.description}. Read from <code class="m-code-inline">@mariachi/cli/program</code>, so it always matches the installed version. See also the <a href={href('docs/cli')}>CLI guide</a>.</p>
+    <Code code="npx @mariachi/cli --help" lang="bash" label={false} />
+  </header>
+  {
+    commands.map((c) => (
+      <section class="x-section x-command" id={id(c)}>
+        <h2 class="x-mono">
+          <a class="x-anchor" href={`#${id(c)}`}>{c.path}</a>
+          {c.aliases.length > 0 && <span class="m-badge">alias {c.aliases.join(', ')}</span>}
+        </h2>
+        {c.description && <p>{c.description}</p>}
+        <Code code={c.usage} lang="bash" label="usage" />
+        {c.arguments.length > 0 && (
+          <TableWrap label="Arguments">
+            <table class="m-table" data-density="compact">
+              <thead><tr><th>Argument</th><th>Required</th><th>Description</th></tr></thead>
+              <tbody>
+                {c.arguments.map((a) => (
+                  <tr>
+                    <td><code class="m-code-inline">{a.variadic ? `${a.name}...` : a.name}</code></td>
+                    <td>{a.required ? 'yes' : 'no'}</td>
+                    <td>{a.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
+        {c.options.length > 0 && (
+          <TableWrap label="Options">
+            <table class="m-table" data-density="compact">
+              <thead><tr><th>Option</th><th>Description</th><th>Default</th></tr></thead>
+              <tbody>
+                {c.options.map((o) => (
+                  <tr>
+                    <td><code class="m-code-inline">{o.flags}</code></td>
+                    <td>{o.description}</td>
+                    <td>{o.defaultValue ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
+        {c.subcommands.length > 0 && (
+          <p class="m-muted">
+            Subcommands: {c.subcommands.map((s, i) => (<>{i > 0 && ', '}<a href={`#${id(s)}`}>{s.name}</a></>))}
+          </p>
+        )}
+      </section>
+    ))
+  }
+</Base>

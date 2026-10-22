@@ -1,0 +1,40 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { namespaceHtml } from '../../../lib/examples';
+import { componentCategoryTitle, designSidebar } from '../../../lib/sidebars';
+import { href } from '../../../lib/url';
+import { loadDesign } from '../../../loaders/design';
+
+const catalog = loadDesign();
+const categories = [...new Set(catalog.components.map((c) => c.category))];
+---
+
+<Base title="Components" description="Every @mariachi/design component." sidebar={designSidebar(catalog)}>
+  <header class="x-page-header">
+    <span class="x-eyebrow">Design</span>
+    <h1>{catalog.components.length} components</h1>
+    <p class="x-lede">Plain HTML with <code class="m-code-inline">m-</code> classes and data attributes. No JavaScript required; the optional behaviors script adds keyboard handling and toasts.</p>
+  </header>
+  {
+    categories.map((cat) => (
+      <section class="x-section">
+        <h2>{componentCategoryTitle(cat)}</h2>
+        <div class="m-grid" style="--m-layout-grid-min: 18rem">
+          {catalog.components
+            .filter((c) => c.category === cat)
+            .map((c) => (
+              <div class="m-card x-component-card x-has-stretched" data-interactive>
+                <div class="x-component-preview" aria-hidden="true" inert data-pagefind-ignore>
+                  <Fragment set:html={namespaceHtml(c.examples[0].html)} />
+                </div>
+                <div class="m-card-body m-stack" data-gap="1">
+                  <a class="m-card-title x-stretched" href={href(`design/components/${c.name}`)}>{c.title}</a>
+                  <div class="m-card-description">{c.description}</div>
+                </div>
+              </div>
+            ))}
+        </div>
+      </section>
+    ))
+  }
+</Base>

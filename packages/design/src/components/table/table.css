@@ -1,0 +1,78 @@
+@layer mariachi.components {
+  .m-table-wrap {
+    overflow: auto;
+    max-inline-size: 100%;
+    border: var(--m-table-wrap-border-width) solid var(--m-table-wrap-border);
+    border-radius: var(--m-table-wrap-radius);
+    background: var(--m-table-bg);
+    box-shadow: var(--m-table-wrap-shadow);
+  }
+
+  .m-table {
+    --_px: var(--m-table-cell-padding-x);
+    --_py: var(--m-table-cell-padding-y);
+
+    inline-size: 100%;
+    border-collapse: collapse;
+    background: var(--m-table-bg);
+    color: var(--m-table-fg);
+    font-size: var(--m-table-font-size);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .m-table[data-density="compact"] {
+    --_px: var(--m-table-compact-padding-x);
+    --_py: var(--m-table-compact-padding-y);
+  }
+
+  .m-table :is(th, td) {
+    padding-block: var(--_py);
+    padding-inline: var(--_px);
+    border-block-end: var(--m-table-border-width) solid var(--m-table-border-color);
+    text-align: start;
+    vertical-align: middle;
+  }
+
+  .m-table thead th {
+    background: var(--m-table-header-bg);
+    color: var(--m-table-header-fg);
+    font-size: var(--m-table-header-font-size);
+    font-weight: var(--m-table-header-font-weight);
+    letter-spacing: var(--m-table-header-tracking);
+    text-transform: var(--m-table-header-transform);
+    white-space: nowrap;
+  }
+
+  .m-table tbody th {
+    font-weight: var(--m-font-weight-medium);
+  }
+
+  .m-table :is(th, td)[data-numeric] {
+    text-align: end;
+  }
+
+  .m-table[data-striped] tbody tr:nth-child(even) > * {
+    background: var(--m-table-stripe-bg);
+  }
+
+  .m-table tbody tr:hover > * {
+    background: var(--m-table-row-hover-bg);
+  }
+
+  .m-table[data-sticky] thead th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: var(--m-z-sticky);
+  }
+
+  .m-table caption {
+    padding-block: var(--m-space-2);
+    caption-side: bottom;
+    color: var(--m-color-fg-muted);
+    text-align: start;
+  }
+
+  .m-table-wrap > .m-table tbody tr:last-child > * {
+    border-block-end: 0;
+  }
+}

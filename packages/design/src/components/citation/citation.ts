@@ -1,0 +1,50 @@
+import { defineComponent } from '../../contract/component';
+import { ref, t } from '../../contract/tokens';
+
+export const citation = defineComponent({
+  name: 'citation',
+  title: 'Citation',
+  category: 'ai',
+  description: 'Inline numbered chips that link a claim to its source, and a list of sources with title, domain and snippet.',
+  useWhen: 'Grounded answers (RAG, web search) where each claim should point to where it came from.',
+  anatomy: {
+    'a.m-citation': 'Inline chip linking to a source ("1"); sits right after the claim',
+    'ol.m-citation-list': 'Numbered list of sources (numbers come from a counter)',
+    '.m-citation-source': 'One source (<li>), with an id the chips link to',
+    '.m-citation-title': 'Source title (usually a link)',
+    '.m-citation-domain': 'Domain or document path',
+    '.m-citation-snippet': 'The quoted passage, clamped to three lines',
+  },
+  tokens: {
+    chipBg: t.color('Chip background', ref('color.accent.subtle')),
+    chipFg: t.color('Chip text', ref('color.accent.text')),
+    chipHoverBg: t.color('Chip background on hover', ref('color.accent.default')),
+    chipHoverFg: t.color('Chip text on hover', ref('color.accent.fg')),
+    chipRadius: t.length('Chip radius', ref('radius.sm')),
+    chipFontSize: t.length('Chip text size', ref('font.size.xs')),
+    chipSize: t.length('Chip minimum width and height', '1.35em'),
+    chipOffset: t.length('Chip raise above the baseline', '0.2em'),
+    listGap: t.length('Space between sources', ref('space.2')),
+    sourceBg: t.color('Source background', ref('color.bg.surface')),
+    sourceBorder: t.color('Source border', ref('color.border.default')),
+    sourceBorderWidth: t.length('Source border width', ref('borderWidth.container')),
+    sourceRadius: t.length('Source radius', ref('radius.md')),
+    sourcePadding: t.length('Source padding', ref('space.3')),
+    titleFg: t.color('Source title', ref('color.fg.default')),
+    domainFg: t.color('Source domain', ref('color.fg.subtle')),
+    snippetFg: t.color('Source snippet', ref('color.fg.muted')),
+    fontSize: t.length('Source text size', ref('font.size.sm')),
+  },
+  contrast: [
+    { fg: 'chipFg', bg: 'chipBg', min: 4.5 },
+    { fg: 'chipHoverFg', bg: 'chipHoverBg', min: 4.5 },
+    { fg: 'titleFg', bg: 'sourceBg', min: 4.5 },
+    { fg: 'domainFg', bg: 'sourceBg', min: 4.5 },
+    { fg: 'snippetFg', bg: 'sourceBg', min: 4.5 },
+  ],
+  a11y: [
+    'Chips are links; give each an accessible name like aria-label="Source 1: AI guide" since "1" alone is ambiguous.',
+    'Link chips to the source entry (href="#source-1") and give the list an aria-label ("Sources").',
+    'The snippet is clamped visually only; the full text stays available to screen readers.',
+  ],
+});

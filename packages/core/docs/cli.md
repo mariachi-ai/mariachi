@@ -1,6 +1,6 @@
 # CLI
 
-`@mariachi/cli` installs the `mariachi` binary. It loads `./.env` when present; variables already set
+`@mariachi/cli` installs the `mariachi` binary (`init`, `generate`, `validate`, `db`, `design`, `explore`). It loads `./.env` when present; variables already set
 in the environment win.
 
 ## init
@@ -74,3 +74,24 @@ All `db` commands take `--schema <path>` (default `src/schema/index.ts`) and `--
 The schema module exports every table: your own `defineTable`s, plus framework tables you use
 (`export { usersTable, tenantsTable } from '@mariachi/database'`, `eventOutboxTable` from
 `@mariachi/events/outbox`, or everything via `@mariachi/schema`).
+
+## design
+
+Builds and checks [design library](./design.md) themes from `mariachi.design.ts` (or `--config <file>`).
+
+| Command | What it does |
+| --- | --- |
+| `design build [-o design.css] [--minify] [--strict]` | One CSS file: foundation, the chosen components (with replacements), the base theme, and only the tokens you changed. Prints contrast failures; `--strict` exits 1 on them. |
+| `design check [--json]` | Validates the config against the token contract and checks contrast in both modes. Exits 1 on failures. |
+| `design new-theme <name> [--from minimal] [-o file]` | Scaffolds `src/styles/<name>.theme.ts` extending a preset. |
+| `design list` | Presets and components. |
+
+## explore
+
+```bash
+mariachi explore [--port 4321] [--host 127.0.0.1] [--open]
+```
+
+Serves the [explorer](./explorer.md) for the installed Mariachi version. Needs `@mariachi/explorer`
+(`pnpm add -D @mariachi/explorer`).
+

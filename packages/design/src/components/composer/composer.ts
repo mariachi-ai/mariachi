@@ -1,0 +1,50 @@
+import { defineComponent } from '../../contract/component';
+import { ref, t } from '../../contract/tokens';
+
+export const composer = defineComponent({
+  name: 'composer',
+  title: 'Prompt composer',
+  category: 'ai',
+  description: 'The message input of a chat: an auto-growing textarea with an actions row for attachments, model choice and send.',
+  useWhen: 'The input at the bottom of an assistant conversation, or any prompt box.',
+  anatomy: {
+    'form.m-composer': 'The composer',
+    '.m-composer-input': 'The <textarea>; grows with its content (field-sizing: content)',
+    '.m-composer-actions': 'Row of controls under the input',
+    '.m-composer-model': 'A native <select> for the model, styled to sit quietly in the row',
+    '.m-composer-spacer': 'Pushes the following controls to the end of the row',
+    '[data-state="streaming"]': 'A reply is streaming: shows a moving line; swap Send for Stop',
+    'textarea:disabled': 'Disables the whole composer visually',
+  },
+  tokens: {
+    bg: t.color('Background', ref('color.bg.surface')),
+    fg: t.color('Text', ref('color.fg.default')),
+    border: t.color('Border', ref('color.border.strong')),
+    focusBorder: t.color('Border while typing', ref('color.border.focus')),
+    borderWidth: t.length('Border width', ref('borderWidth.control')),
+    radius: t.length('Radius', ref('radius.container')),
+    shadow: t.shadow('Shadow', ref('shadow.sm')),
+    padding: t.length('Padding', ref('space.3')),
+    gap: t.length('Space between input and actions', ref('space.2')),
+    fontSize: t.length('Input text size', ref('font.size.md')),
+    minHeight: t.length('Minimum input height', '1.5lh'),
+    maxHeight: t.length('Maximum input height before scrolling', '16rem'),
+    modelFg: t.color('Model picker text', ref('color.fg.muted')),
+    disabledOpacity: t.number('Opacity when disabled', '0.6'),
+    streamingColor: t.color('Streaming line', ref('color.accent.default')),
+    streamingDuration: t.duration('Streaming line sweep', 'calc(var(--m-motion-duration-slow) * 5)'),
+  },
+  contrast: [
+    { fg: 'fg', bg: 'bg', min: 4.5 },
+    { fg: 'modelFg', bg: 'bg', min: 4.5 },
+    { fg: 'color.fg.subtle', bg: 'bg', min: 4.5 },
+    { fg: 'border', bg: 'color.bg.canvas', min: 3 },
+  ],
+  requires: ['button'],
+  a11y: [
+    'Label the textarea (a .m-sr-only <label> is fine) and keep placeholder text as a hint, not the label.',
+    'Submit on Enter and insert a newline on Shift+Enter; say so in the hint or placeholder.',
+    'While streaming, replace Send with a Stop button that has its own label, and keep focus in the textarea.',
+    'Icon-only buttons (attach) need an aria-label.',
+  ],
+});

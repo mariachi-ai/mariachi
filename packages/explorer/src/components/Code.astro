@@ -1,0 +1,33 @@
+---
+import { highlight } from '../lib/markdown';
+
+interface Props {
+  code: string;
+  lang?: string;
+  /** Label in the header (defaults to the language). Pass `false` for a bare block with a floating copy button. */
+  label?: string | false;
+}
+const { code, lang = 'ts', label } = Astro.props;
+const html = await highlight(code, lang);
+---
+
+{
+  label === false ? (
+    <div class="x-code-block">
+      <button type="button" class="m-button x-copy" data-size="sm" data-variant="ghost" data-m-copy={code} aria-label="Copy code">
+        Copy
+      </button>
+      <Fragment set:html={html} />
+    </div>
+  ) : (
+    <div class="m-code-frame">
+      <div class="m-code-header">
+        <span class="m-code-lang">{label ?? lang}</span>
+        <button type="button" class="m-button x-copy-inline" data-size="sm" data-variant="ghost" data-m-copy={code}>
+          Copy
+        </button>
+      </div>
+      <Fragment set:html={html} />
+    </div>
+  )
+}

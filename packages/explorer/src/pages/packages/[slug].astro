@@ -1,0 +1,232 @@
+---
+import TableWrap from '../../components/TableWrap.astro';
+import Code from '../../components/Code.astro';
+import StatusBadge from '../../components/StatusBadge.astro';
+import type { Heading } from '../../data/schema';
+import Base from '../../layouts/Base.astro';
+import { packagesSidebar } from '../../lib/sidebars';
+import { href } from '../../lib/url';
+import { loadApi } from '../../loaders/api';
+import { loadErrors } from '../../loaders/errors';
+import { loadCategories, loadPackages } from '../../loaders/packages';
+
+export async function getStaticPaths() {
+  return (await loadPackages()).map((p) => ({ params: { slug: p.slug } }));
+}
+
+const { slug } = Astro.params;
+const [packages, categories, api, { errors }] = await Promise.all([loadPackages(), loadCategories(), loadApi(), loadErrors()]);
+const pkg = packages.find((p) => p.slug === slug)!;
+const pkgApi = api.find((a) => a.slug === slug);
+const symbolCount = pkgApi?.entries.reduce((n, e) => n + e.symbols.length, 0) ?? 0;
+const pkgErrors = errors.filter((e) => e.package === pkg.name);
+const codes = [...new Map(pkgErrors.map((e) => [e.code, e])).values()];
+const slugOf = (name: string) => packages.find((p) => p.name === name)?.slug;
+const vendorPeers = pkg.peers.filter((p) => !p.internal);
+const toc: Heading[] = [
+  { depth: 2, id: 'overview', text: 'Overview' },
+  { depth: 2, id: 'dependencies', text: 'Dependencies' },
+  ...(symbolCount ? [{ depth: 2, id: 'api', text: 'API' }] : []),
+  ...(codes.length ? [{ depth: 2, id: 'errors', text: 'Error codes' }] : []),
+  ...(pkg.readme ? [{ depth: 2, id: 'readme', text: 'README' }, ...pkg.readme.headings.map((h) => ({ ...h, depth: 3 }))] : []),
+];
+---
+
+<Base title={pkg.name} description={pkg.description} sidebar={packagesSidebar(packages, categories)} toc={toc}>
+  <nav class="m-breadcrumb" aria-label="Breadcrumb">
+    <ol>
+      <li><a href={href('packages')}>Packages</a></li>
+      <li><a href={`${href('packages')}#${pkg.category}`}>{pkg.categoryTitle}</a></li>
+      <li aria-current="page">{pkg.name.replace('@mariachi/', '')}</li>
+    </ol>
+  </nav>
+  <header class="x-page-header">
+    <div class="m-cluster" data-gap="3">
+      <h1 class="x-mono">{pkg.name}</h1>
+      <StatusBadge status={pkg.status} />
+    </div>
+    <p class="x-lede">{pkg.description}</p>
+    <div class="x-meta">
+      <span>v{pkg.version}</span>
+      <span>{pkg.categoryTitle}</span>
+      <a href={pkg.sourceUrl}>Source</a>
+      {symbolCount > 0 && <a href={href(`api/${pkg.slug}`)}>{symbolCount} exported symbols</a>}
+    </div>
+  </header>
+
+  <section class="x-section" id="overview">
+    <h2>Overview</h2>
+    <dl class="x-definition">
+      <dt>Use it when</dt>
+      <dd>{pkg.useWhen}</dd>
+      <dt>Install</dt>
+      <dd><Code code={pkg.install} lang="bash" label={false} /></dd>
+      {
+        pkg.entry.length > 0 && (
+          <>
+            <dt>Entry points</dt>
+            <dd class="m-cluster" data-gap="2">
+              {pkg.entry.map((e) => (
+                <a href={`${href(`api/${pkg.slug}`)}#${e}`}>
+                  <code class="m-code-inline">{e}</code>
+                </a>
+              ))}
+            </dd>
+          </>
+        )
+      }
+      {
+        pkg.subpaths.length > 0 && (
+          <>
+            <dt>Imports</dt>
+            <dd class="m-stack" data-gap="1">
+              {pkg.subpaths.map((s) => (
+                <span>
+                  <code class="m-code-inline">{`${pkg.name}${s.subpath}`}</code> {s.kind === 'asset' && <span class="m-badge" data-tone="info">asset</span>}
+                </span>
+              ))}
+            </dd>
+          </>
+        )
+      }
+      {
+        pkg.relatedDocs.length > 0 && (
+          <>
+            <dt>Docs</dt>
+            <dd class="m-cluster" data-gap="3">
+              {pkg.relatedDocs.map((d) => (
+                <a href={href(`docs/${d.slug}`)}>{d.title}</a>
+              ))}
+            </dd>
+          </>
+        )
+      }
+    </dl>
+  </section>
+
+  <section class="x-section" id="dependencies">
+    <h2>Dependencies</h2>
+    <div class="m-grid" style="--m-layout-grid-min: 16rem">
+      <div class="m-card" data-variant="outline">
+        <div class="m-card-header"><div class="m-card-title">Depends on</div></div>
+        <div class="m-card-body">
+          {
+            pkg.dependencies.length ? (
+              <ul class="x-plain-list">
+                {pkg.dependencies.map((d) => (
+                  <li>
+                    <a class="x-mono" href={href(`packages/${slugOf(d)}`)}>{d}</a>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span class="m-muted">No other Mariachi packages.</span>
+            )
+          }
+        </div>
+      </div>
+      <div class="m-card" data-variant="outline">
+        <div class="m-card-header"><div class="m-card-title">Used by</div></div>
+        <div class="m-card-body">
+          {
+            pkg.usedBy.length ? (
+              <ul class="x-plain-list">
+                {pkg.usedBy.map((d) => (
+                  <li>
+                    <a class="x-mono" href={href(`packages/${slugOf(d)}`)}>{d}</a>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span class="m-muted">Nothing else depends on it.</span>
+            )
+          }
+        </div>
+      </div>
+      {
+        vendorPeers.length > 0 && (
+          <div class="m-card" data-variant="outline">
+            <div class="m-card-header">
+              <div class="m-card-title">Vendor SDKs</div>
+              <div class="m-card-description">Peer dependencies, loaded lazily</div>
+            </div>
+            <div class="m-card-body">
+              <ul class="x-plain-list">
+                {vendorPeers.map((p) => (
+                  <li>
+                    <code class="m-code-inline">{p.name}</code> <span class="m-subtle">{p.range}</span> {p.optional && <span class="m-badge">optional</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )
+      }
+    </div>
+  </section>
+
+  {
+    pkgApi && symbolCount > 0 && (
+      <section class="x-section" id="api">
+        <h2>API</h2>
+        {pkgApi.entries
+          .filter((e) => e.symbols.length > 0)
+          .map((e) => (
+            <div class="m-stack" data-gap="2">
+              <h3 class="x-mono">{e.importPath}</h3>
+              <div class="m-cluster" data-gap="2">
+                {e.symbols.map((s) => (
+                  <a href={`${href(`api/${pkg.slug}`)}#${e.subpath ? `${e.subpath.slice(1)}-` : ''}${s.name}`}>
+                    <code class="m-code-inline">{s.name}</code>
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
+      </section>
+    )
+  }
+
+  {
+    codes.length > 0 && (
+      <section class="x-section" id="errors">
+        <h2>Error codes</h2>
+        <TableWrap label="Error codes">
+          <table class="m-table" data-density="compact">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>HTTP</th>
+                <th>Class</th>
+              </tr>
+            </thead>
+            <tbody>
+              {codes.map((e) => (
+                <tr>
+                  <td>
+                    <a href={`${href('reference/errors')}#${encodeURIComponent(e.code)}`}>
+                      <code class="m-code-inline">{e.code}</code>
+                    </a>
+                  </td>
+                  <td>{e.http ?? '–'}</td>
+                  <td class="x-mono">{e.className}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
+      </section>
+    )
+  }
+
+  {
+    pkg.readme && (
+      <section class="x-section" id="readme">
+        <h2>README</h2>
+        <div class="m-prose">
+          <Fragment set:html={pkg.readme.html} />
+        </div>
+      </section>
+    )
+  }
+</Base>

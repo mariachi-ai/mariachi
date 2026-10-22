@@ -1,0 +1,54 @@
+@layer mariachi.base {
+  @keyframes m-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  @keyframes m-pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  @keyframes m-blink {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes m-shimmer {
+    from {
+      background-position: 100% 0;
+    }
+
+    to {
+      background-position: -100% 0;
+    }
+  }
+
+  @keyframes m-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes m-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+  }
+
+  /*
+   * Reduced motion: every duration collapses to zero. The base layer comes after the theme layer,
+   * so this wins over any preset's durations.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    [data-theme] {
+      --m-motion-duration-fast: 0ms;
+      --m-motion-duration-normal: 0ms;
+      --m-motion-duration-slow: 0ms;
+    }
+  }
+}

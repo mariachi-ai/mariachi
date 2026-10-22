@@ -1,0 +1,59 @@
+@layer mariachi.components {
+  .m-switch {
+    --_width: var(--m-switch-width);
+    --_height: var(--m-switch-height);
+    --_track: var(--m-switch-track-bg);
+    --_thumb: var(--m-switch-thumb-bg);
+
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    inline-size: var(--_width);
+    block-size: var(--_height);
+    margin: 0;
+    border: var(--m-switch-border-width) solid var(--m-switch-border);
+    border-radius: var(--m-switch-radius);
+    background: var(--_track);
+    vertical-align: middle;
+    appearance: none;
+    cursor: pointer;
+    transition: background-color var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-switch::before {
+    content: "";
+    position: absolute;
+    inset-block: var(--m-switch-thumb-inset);
+    inset-inline-start: var(--m-switch-thumb-inset);
+    aspect-ratio: 1;
+    border-radius: var(--m-switch-radius);
+    background: var(--_thumb);
+    box-shadow: var(--m-switch-thumb-shadow);
+    transition:
+      translate var(--m-motion-duration-normal) var(--m-motion-easing-emphasized),
+      background-color var(--m-motion-duration-fast) var(--m-motion-easing-standard);
+  }
+
+  .m-switch[data-size="sm"] {
+    --_width: var(--m-switch-sm-width);
+    --_height: var(--m-switch-sm-height);
+  }
+
+  .m-switch:checked {
+    --_track: var(--m-switch-track-checked-bg);
+    --_thumb: var(--m-switch-thumb-checked-bg);
+  }
+
+  .m-switch:checked::before {
+    translate: calc(var(--_width) - var(--_height)) 0;
+  }
+
+  .m-switch:dir(rtl):checked::before {
+    translate: calc(var(--_height) - var(--_width)) 0;
+  }
+
+  .m-switch:disabled {
+    opacity: var(--m-switch-disabled-opacity);
+    cursor: not-allowed;
+  }
+}

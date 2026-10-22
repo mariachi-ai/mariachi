@@ -1,11 +1,11 @@
 {
   "name": "@mariachi/cli",
   "version": "0.0.5",
-  "description": "The mariachi binary: init, generate, validate and db (generate, check, migrate, seed).",
+  "description": "The mariachi binary: init, generate, validate, db (generate, check, migrate, seed), design and explore.",
   "mariachi": {
     "category": "tooling",
     "status": "beta",
-    "useWhen": "Creating projects, generating code, running migrations",
+    "useWhen": "Creating projects, generating code, running migrations, building design themes, browsing the explorer",
     "entry": []
   },
   "type": "module",
@@ -16,6 +16,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./program": {
+      "types": "./dist/program.d.ts",
+      "import": "./dist/program.js"
     }
   },
   "files": [
@@ -42,7 +46,16 @@
     "@mariachi/database-postgres": "workspace:*",
     "commander": "^13",
     "drizzle-kit": "^0.30",
-    "jiti": "^2.4"
+    "jiti": "^2.4",
+    "@mariachi/design": "workspace:*"
+  },
+  "peerDependencies": {
+    "@mariachi/explorer": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@mariachi/explorer": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "drizzle-orm": "^0.38",

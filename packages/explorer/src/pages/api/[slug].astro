@@ -1,0 +1,98 @@
+---
+import TableWrap from '../../components/TableWrap.astro';
+import Code from '../../components/Code.astro';
+import StatusBadge from '../../components/StatusBadge.astro';
+import type { Heading } from '../../data/schema';
+import Base from '../../layouts/Base.astro';
+import { apiSidebar } from '../../lib/sidebars';
+import { href } from '../../lib/url';
+import { loadApi } from '../../loaders/api';
+import { loadCategories, loadPackages } from '../../loaders/packages';
+
+export async function getStaticPaths() {
+  return (await loadApi()).filter((a) => a.entries.some((e) => e.symbols.length > 0)).map((a) => ({ params: { slug: a.slug } }));
+}
+
+const [api, packages, categories] = await Promise.all([loadApi(), loadPackages(), loadCategories()]);
+const pkgApi = api.find((a) => a.slug === Astro.params.slug)!;
+const pkg = packages.find((p) => p.slug === Astro.params.slug)!;
+const anchor = (subpath: string, name: string) => `${subpath ? `${subpath.slice(1)}-` : ''}${name}`;
+const entries = pkgApi.entries.filter((e) => e.symbols.length > 0);
+const toc: Heading[] = entries.map((e) => ({ depth: 2, id: `import-${e.subpath.slice(1) || 'root'}`, text: e.importPath }));
+const KIND_LABEL: Record<string, string> = { function: 'Functions', class: 'Classes', variable: 'Constants', interface: 'Interfaces', type: 'Types', enum: 'Enums', namespace: 'Namespaces' };
+---
+
+<Base title={`${pkg.name} API`} description={`Exported API of ${pkg.name}: ${pkg.description}`} sidebar={apiSidebar(api, packages, categories)} toc={toc}>
+  <nav class="m-breadcrumb" aria-label="Breadcrumb">
+    <ol>
+      <li><a href={href('api')}>API</a></li>
+      <li aria-current="page">{pkg.name.replace('@mariachi/', '')}</li>
+    </ol>
+  </nav>
+  <header class="x-page-header">
+    <div class="m-cluster" data-gap="3">
+      <h1 class="x-mono">{pkg.name}</h1>
+      <StatusBadge status={pkg.status} />
+    </div>
+    <p class="x-lede">{pkg.description}</p>
+    <div class="x-meta"><a href={href(`packages/${pkg.slug}`)}>Package overview</a></div>
+  </header>
+
+  {
+    entries.map((entry) => (
+      <section class="x-section" id={`import-${entry.subpath.slice(1) || 'root'}`}>
+        <h2 class="x-mono">{entry.importPath}</h2>
+        {Object.keys(KIND_LABEL)
+          .filter((kind) => entry.symbols.some((s) => s.kind === kind))
+          .map((kind) => (
+            <div>
+              <h3 class="x-kind-heading">{KIND_LABEL[kind]}</h3>
+              {entry.symbols
+                .filter((s) => s.kind === kind)
+                .map((s) => (
+                  <article class="x-symbol" id={anchor(entry.subpath, s.name)}>
+                    <div class="x-symbol-head">
+                      <h3>
+                        <a class="x-anchor" href={`#${anchor(entry.subpath, s.name)}`}>{s.name}</a>
+                      </h3>
+                      <span class="m-badge" data-tone="neutral">{s.kind}</span>
+                      {s.deprecated !== null && <span class="m-badge" data-tone="warning">deprecated</span>}
+                    </div>
+                    {s.deprecated && <p class="m-muted">Deprecated: {s.deprecated}</p>}
+                    {s.summary && <p>{s.summary}</p>}
+                    <Code code={s.signature} lang="ts" label={false} />
+                    {s.tags.length > 0 && (
+                      <dl class="x-definition">
+                        {s.tags.map((t) => (
+                          <>
+                            <dt>@{t.name}</dt>
+                            <dd>{t.text}</dd>
+                          </>
+                        ))}
+                      </dl>
+                    )}
+                    {s.members.length > 0 && (
+                      <details class="x-members">
+                        <summary>{s.members.length} member{s.members.length === 1 ? '' : 's'}</summary>
+                        <TableWrap label="Members">
+                          <table class="m-table" data-density="compact">
+                            <tbody>
+                              {s.members.map((m) => (
+                                <tr>
+                                  <td><code class="m-code-inline">{m.signature}</code></td>
+                                  <td class="m-muted">{m.summary}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </TableWrap>
+                      </details>
+                    )}
+                  </article>
+                ))}
+            </div>
+          ))}
+      </section>
+    ))
+  }
+</Base>

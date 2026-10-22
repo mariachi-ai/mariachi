@@ -1,0 +1,95 @@
+@layer mariachi.components {
+  .m-progress,
+  .m-meter {
+    --_height: var(--m-progress-height-md);
+
+    appearance: none;
+    display: block;
+    inline-size: 100%;
+    block-size: var(--_height);
+    overflow: hidden;
+    border: var(--m-progress-border-width) solid var(--m-progress-border);
+    border-radius: var(--m-progress-radius);
+    background: var(--m-progress-track);
+    color: var(--m-progress-fill);
+  }
+
+  :is(.m-progress, .m-meter)[data-size="sm"] {
+    --_height: var(--m-progress-height-sm);
+  }
+
+  :is(.m-progress, .m-meter)[data-size="lg"] {
+    --_height: var(--m-progress-height-lg);
+  }
+
+  /* Progress */
+  .m-progress::-webkit-progress-bar {
+    background: var(--m-progress-track);
+  }
+
+  .m-progress::-webkit-progress-value {
+    background: var(--m-progress-fill);
+    border-radius: var(--m-progress-radius);
+    transition: inline-size var(--m-motion-duration-normal) var(--m-motion-easing-standard);
+  }
+
+  .m-progress::-moz-progress-bar {
+    background: var(--m-progress-fill);
+    border-radius: var(--m-progress-radius);
+  }
+
+  .m-progress:indeterminate {
+    background-image: linear-gradient(
+      90deg,
+      var(--m-progress-track) 0 35%,
+      var(--m-progress-fill) 35% 65%,
+      var(--m-progress-track) 65% 100%
+    );
+    background-size: 200% 100%;
+    animation: m-shimmer var(--m-progress-duration) linear infinite;
+  }
+
+  .m-progress:indeterminate::-webkit-progress-bar {
+    background: transparent;
+  }
+
+  .m-progress:indeterminate::-moz-progress-bar {
+    background: transparent;
+  }
+
+  /* Meter. Chrome only fills the bar when it gets an explicit height. */
+  .m-meter::-webkit-meter-bar {
+    block-size: calc(var(--_height) - var(--m-progress-border-width) * 2);
+    margin: 0;
+    border: 0;
+    border-radius: var(--m-progress-radius);
+    background: var(--m-progress-track);
+  }
+
+  .m-meter::-webkit-meter-optimum-value {
+    background: var(--m-progress-optimum);
+    border-radius: var(--m-progress-radius);
+  }
+
+  .m-meter::-webkit-meter-suboptimum-value {
+    background: var(--m-progress-suboptimum);
+    border-radius: var(--m-progress-radius);
+  }
+
+  .m-meter::-webkit-meter-even-less-good-value {
+    background: var(--m-progress-bad);
+    border-radius: var(--m-progress-radius);
+  }
+
+  .m-meter:-moz-meter-optimum::-moz-meter-bar {
+    background: var(--m-progress-optimum);
+  }
+
+  .m-meter:-moz-meter-sub-optimum::-moz-meter-bar {
+    background: var(--m-progress-suboptimum);
+  }
+
+  .m-meter:-moz-meter-sub-sub-optimum::-moz-meter-bar {
+    background: var(--m-progress-bad);
+  }
+}
