@@ -66,6 +66,17 @@ export class FastifyAdapter {
     this.server = new FastifyServerAdapter({ ...config, logger: this.logger });
   }
 
+  /**
+   * Direct access to the Fastify instance before it starts, for what controllers don't model:
+   * hooks that run before authentication, and routes that set cookies or redirect (an OAuth
+   * callback). Prefer controllers; routes added here bypass the facade's auth, validation and
+   * rate limits.
+   */
+  configure(fn: Parameters<FastifyServerAdapter['configure']>[0]): this {
+    this.server.configure(fn);
+    return this;
+  }
+
   /** Registers a named auth strategy (e.g. `session` → `bearerStrategy(jwt)`). */
   withAuthStrategy(name: AuthStrategy, handler: AuthStrategyHandler): this {
     this.strategies.set(name, handler);
