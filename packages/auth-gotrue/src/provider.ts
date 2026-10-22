@@ -24,13 +24,21 @@ function strings(v: unknown): string[] {
  * - the org claim (`org_id` by default, added by a custom access-token hook) → `tenantId`;
  * - `role` (GoTrue's Postgres role, e.g. `authenticated`), a `roles` array and the org role claim
  *   (`org_role` by default) → `roles`; `scopes` is `roles` plus the space-separated `scope` claim;
- * - the whole verified payload (`aal`, `amr`, `act`, `is_anonymous`, `app_metadata`, …) → `claims`.
+ * - the whole verified payload (`org_id`, `org_role`, `aal`, `amr`, `act`, `is_anonymous`, `app_metadata`, …)
+ *   → `claims`, which `createAuthMiddleware` and the API facade pass on to tenancy's `jwt-claim` strategy.
+ *
+ * The issuer is `issuer`, else `url`, else (with `discoverIssuer`) the one GoTrue's discovery document names.
  */
 export class GoTrueAuthProvider implements AuthProvider {
   readonly name = 'gotrue';
 
   private readonly jwks: JWTVerifyGetKey;
-  private readonly issuer: string;
+  private readonly base: string;
+  /** The configured issuer; undefined with `discoverIssuer`. */
+  private readonly issuer?: string;
+  private readonly issuerMaxAgeMs: number;
+  private discovered?: { issuer: string; expiresAt: number };
+  private discovering?: Promise<string>;
   private readonly audience: string | string[];
   private readonly algorithms: AsymmetricAlgorithm[];
   private readonly orgClaim: string;
@@ -44,7 +52,12 @@ export class GoTrueAuthProvider implements AuthProvider {
     if (this.algorithms.some((a) => HMAC.test(a))) {
       throw new AuthError('auth/invalid-config', 'GoTrue: HMAC algorithms are not accepted; verify through the JWKS');
     }
-    this.issuer = config.issuer ?? base;
+    if (config.discoverIssuer && config.issuer) {
+      throw new AuthError('auth/invalid-config', 'GoTrue: set `issuer` or `discoverIssuer`, not both');
+    }
+    this.base = base;
+    this.issuer = config.discoverIssuer ? undefined : (config.issuer ?? base);
+    this.issuerMaxAgeMs = config.jwksCacheMaxAgeMs ?? 60_000;
     this.audience = config.audience ?? 'authenticated';
     this.orgClaim = config.orgClaim ?? 'org_id';
     this.orgRoleClaim = config.orgRoleClaim ?? 'org_role';
@@ -58,11 +71,12 @@ export class GoTrueAuthProvider implements AuthProvider {
   }
 
   async verify(token: string): Promise<ResolvedIdentity> {
+    const issuer = this.issuer ?? (await this.discoverIssuer());
     let payload: GoTrueJwtPayload;
     try {
       const result = await jwtVerify(token, this.jwks, {
         algorithms: this.algorithms,
-        issuer: this.issuer,
+        issuer,
         audience: this.audience,
         clockTolerance: this.clockTolerance,
         requiredClaims: ['sub', 'exp'],
@@ -72,6 +86,34 @@ export class GoTrueAuthProvider implements AuthProvider {
       throw new AuthError('auth/invalid-token', `GoTrue token verification failed: ${(error as Error).message}`);
     }
     return this.toIdentity(payload);
+  }
+
+  /** The issuer from `<url>/.well-known/openid-configuration`, cached like the JWKS; one fetch at a time. */
+  private async discoverIssuer(): Promise<string> {
+    if (this.discovered && this.discovered.expiresAt > Date.now()) return this.discovered.issuer;
+    this.discovering ??= this.fetchIssuer().finally(() => {
+      this.discovering = undefined;
+    });
+    return this.discovering;
+  }
+
+  private async fetchIssuer(): Promise<string> {
+    const url = `${this.base}/.well-known/openid-configuration`;
+    let doc: { issuer?: unknown } | null = null;
+    try {
+      const res = await fetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(5_000) });
+      if (res.ok) doc = (await res.json()) as { issuer?: unknown } | null;
+      else throw new AuthError('auth/invalid-token', `GoTrue discovery failed: ${url} answered ${res.status}`);
+    } catch (error) {
+      if (error instanceof AuthError) throw error;
+      throw new AuthError('auth/invalid-token', `GoTrue discovery failed: ${(error as Error).message}`);
+    }
+    const issuer = doc?.issuer;
+    if (typeof issuer !== 'string' || !issuer) {
+      throw new AuthError('auth/invalid-token', 'GoTrue discovery: no issuer in the document (set GOTRUE_JWT_ISSUER)');
+    }
+    this.discovered = { issuer, expiresAt: Date.now() + this.issuerMaxAgeMs };
+    return issuer;
   }
 
   /** The mapping `verify` applies to a verified payload. */

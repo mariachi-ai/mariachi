@@ -7,6 +7,7 @@ import { names } from './names';
 import { entityFiles } from './templates/entity';
 import { controllerFile, integrationFiles, jobFile, serviceFiles } from './templates/parts';
 import { projectFiles } from './templates/project';
+import { PROJECT_AUTH } from './types';
 import type {
   GenerateControllerConfig,
   GenerateEntityConfig,
@@ -21,17 +22,24 @@ import { mergeResults, writeFiles, type Insertion } from './writer';
 
 const NPM_NAME = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
 
-/** Scaffolds a runnable project and, unless `example: false`, a `note` entity wired end to end. */
+/**
+ * Scaffolds a runnable project and, unless `example: false`, a `note` entity wired end to end.
+ * `auth: 'ensemble'` signs users in with Ensemble's per-app auth (see `ProjectConfig.auth`).
+ */
 export async function createProject(config: ProjectConfig): Promise<GenerateResult> {
   if (!NPM_NAME.test(config.name)) {
     throw new ConfigError('create/invalid-name', `"${config.name}" is not a valid npm package name`);
+  }
+  const auth = config.auth ?? 'jwt';
+  if (!PROJECT_AUTH.includes(auth)) {
+    throw new ConfigError('create/invalid-auth', `Unknown auth "${auth}": use ${PROJECT_AUTH.join(' or ')}`);
   }
   if (existsSync(config.outputDir) && (await readdir(config.outputDir)).length > 0) {
     throw new ConfigError('create/dir-not-empty', `${config.outputDir} already exists and is not empty`);
   }
   await mkdir(config.outputDir, { recursive: true });
   const range = config.mariachiVersion ?? `^${MARIACHI_VERSION}`;
-  const project = await writeFiles(config.outputDir, projectFiles(config.name, range));
+  const project = await writeFiles(config.outputDir, projectFiles(config.name, range, auth));
   if (config.example === false) return project;
   const example = await generateEntity({ name: 'note', projectRoot: config.outputDir });
   return { ...mergeResults(project, example), updated: [] };

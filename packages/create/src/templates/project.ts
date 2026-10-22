@@ -1,5 +1,7 @@
 import { LAYOUT, MARKERS } from '../layout';
+import type { ProjectAuth } from '../types';
 import { THIRD_PARTY_VERSIONS as V } from '../version';
+import { databaseName, ENSEMBLE_DEV_SCRIPT, ENSEMBLE_NODE_ENGINES, ensembleFiles } from './ensemble';
 
 const MARIACHI_DEPS = [
   'api-facade',
@@ -13,9 +15,16 @@ const MARIACHI_DEPS = [
   'lifecycle',
 ] as const;
 
-export function projectFiles(name: string, mariachiRange: string): Record<string, string> {
+/** Framework packages a sign-in choice adds. */
+const AUTH_DEPS: Record<ProjectAuth, readonly string[]> = {
+  jwt: [],
+  ensemble: ['auth-gotrue', 'tenancy'],
+};
+
+export function projectFiles(name: string, mariachiRange: string, auth: ProjectAuth = 'jwt'): Record<string, string> {
+  const ensemble = auth === 'ensemble';
   const dependencies: Record<string, string> = {};
-  for (const pkg of MARIACHI_DEPS) dependencies[`@mariachi/${pkg}`] = mariachiRange;
+  for (const pkg of [...MARIACHI_DEPS, ...AUTH_DEPS[auth]].sort()) dependencies[`@mariachi/${pkg}`] = mariachiRange;
   dependencies.zod = V.zod;
   dependencies['drizzle-orm'] = V['drizzle-orm'];
   dependencies.postgres = V.postgres;
@@ -26,7 +35,7 @@ export function projectFiles(name: string, mariachiRange: string): Record<string
     private: true,
     type: 'module',
     scripts: {
-      dev: 'tsx watch --env-file=.env src/main.ts',
+      dev: ensemble ? ENSEMBLE_DEV_SCRIPT : 'tsx watch --env-file=.env src/main.ts',
       build: 'tsup src/main.ts --format esm --target node20 --clean',
       start: 'node dist/main.js',
       typecheck: 'tsc --noEmit',
@@ -48,7 +57,7 @@ export function projectFiles(name: string, mariachiRange: string): Record<string
       typescript: V.typescript,
       vitest: V.vitest,
     },
-    engines: { node: '>=20.12' },
+    engines: { node: ensemble ? ENSEMBLE_NODE_ENGINES : '>=20.12' },
   };
 
   const tsconfig = {
@@ -69,7 +78,7 @@ export function projectFiles(name: string, mariachiRange: string): Record<string
     include: ['src'],
   };
 
-  return {
+  const files: Record<string, string> = {
     'package.json': `${JSON.stringify(packageJson, null, 2)}\n`,
     'tsconfig.json': `${JSON.stringify(tsconfig, null, 2)}\n`,
     '.gitignore': 'node_modules/\ndist/\n.env\ncoverage/\n',
@@ -86,12 +95,13 @@ export function projectFiles(name: string, mariachiRange: string): Record<string
     [LAYOUT.controllersIndex]: CONTROLLERS_INDEX,
     [LAYOUT.jobsIndex]: JOBS_INDEX,
   };
+  return ensemble ? { ...files, ...ensembleFiles(name) } : files;
 }
 
 const ENV_EXAMPLE = (name: string) => `SERVICE_NAME=${name}
 NODE_ENV=development
 PORT=3000
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/${name.replace(/[^a-z0-9_]/gi, '_')}
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/${databaseName(name)}
 REDIS_URL=redis://localhost:6379
 # At least 32 characters. Tokens are verified with HS256.
 JWT_SECRET=change-me-change-me-change-me-change-me

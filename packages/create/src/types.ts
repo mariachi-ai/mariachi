@@ -7,7 +7,17 @@ export interface ProjectConfig {
   example?: boolean;
   /** Override the `@mariachi/*` version range written to package.json. Default `^<framework version>`. */
   mariachiVersion?: string;
+  /**
+   * How users sign in. `jwt` (default): HS256 tokens from `JWT_SECRET` (`JWTAdapter`). `ensemble`:
+   * Ensemble's per-app auth, GoTrue at `/auth/v1` verified with `@mariachi/auth-gotrue`, the tenant
+   * from the `org_id` claim (`@mariachi/tenancy`), plus the Ensemble environment file, seeded users
+   * and an example sign-in page.
+   */
+  auth?: ProjectAuth;
 }
+
+export const PROJECT_AUTH = ['jwt', 'ensemble'] as const;
+export type ProjectAuth = (typeof PROJECT_AUTH)[number];
 
 export interface GenerateOptions {
   name: string;

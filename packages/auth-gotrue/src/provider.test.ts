@@ -19,12 +19,21 @@ let server: Server;
 let base: string;
 let published: JWK[] = [];
 let jwksHits = 0;
+// GoTrue's /.well-known/openid-configuration: `issuer` is GOTRUE_JWT_ISSUER (the public URL); null → 404.
+let discovery: Record<string, unknown> | null = null;
+let discoveryHits = 0;
 
 beforeAll(async () => {
   server = createServer((req, res) => {
     if (req.url === '/auth/v1/.well-known/jwks.json') {
       jwksHits += 1;
       res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ keys: published }));
+      return;
+    }
+    if (req.url === '/auth/v1/.well-known/openid-configuration') {
+      discoveryHits += 1;
+      if (!discovery) res.writeHead(404).end();
+      else res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(discovery));
       return;
     }
     res.writeHead(404).end();
@@ -78,6 +87,11 @@ describe('GoTrueAuthProvider.verify', () => {
       scopes: ['authenticated', 'owner'],
     });
     expect(id.claims).toMatchObject({
+      org_id: 'org-acme',
+      org_role: 'owner',
+      app_metadata: { persona: 'admin', provider: 'email', providers: ['email'] },
+      user_metadata: { email_verified: true },
+      role: 'authenticated',
       aal: 'aal1',
       amr: [{ method: 'password', timestamp: 1792582414 }],
       act: { sub: 'reviewer-1' },
@@ -173,5 +187,57 @@ describe('GoTrueAuthProvider.verify', () => {
     const provider = createGoTrueAuth({ url: 'https://public.example/auth/v1', jwksUrl: `${base}/.well-known/jwks.json`, issuer: base });
     await expect(provider.verify(await sign(key, gotrueClaims()))).resolves.toBeTruthy();
     expect(jwksHits).toBeGreaterThan(hits);
+  });
+});
+
+describe('GoTrueAuthProvider with discoverIssuer', () => {
+  // In an Ensemble preview the app reaches GoTrue on loopback, but tokens carry the public issuer.
+  const publicIssuer = 'https://preview-1.example.dev/auth/v1';
+
+  it("verifies against the issuer GoTrue's discovery document names, not the internal url", async () => {
+    const key = await makeKey('d1');
+    published = [key.jwk];
+    discovery = { issuer: publicIssuer, jwks_uri: `${publicIssuer}/.well-known/jwks.json` };
+    const provider = createGoTrueAuth({ url: base, discoverIssuer: true });
+    const hits = discoveryHits;
+    await expect(provider.verify(await sign(key, gotrueClaims({ org_id: 'org-acme' }), { iss: publicIssuer }))).resolves.toMatchObject({
+      tenantId: 'org-acme',
+    });
+    // The internal url is not an accepted issuer, and the document is fetched once while fresh.
+    await expect(provider.verify(await sign(key, gotrueClaims()))).rejects.toMatchObject({ code: 'auth/invalid-token' });
+    expect(discoveryHits - hits).toBe(1);
+  });
+
+  it('re-reads the document after the cache age, so a fork on a new host is picked up', async () => {
+    const key = await makeKey('d2');
+    published = [key.jwk];
+    discovery = { issuer: publicIssuer };
+    const provider = createGoTrueAuth({ url: base, discoverIssuer: true, jwksCacheMaxAgeMs: 50, jwksCooldownMs: 0 });
+    await expect(provider.verify(await sign(key, gotrueClaims(), { iss: publicIssuer }))).resolves.toBeTruthy();
+    const forked = 'https://preview-2.example.dev/auth/v1';
+    discovery = { issuer: forked };
+    await new Promise((r) => setTimeout(r, 80));
+    await expect(provider.verify(await sign(key, gotrueClaims(), { iss: publicIssuer }))).rejects.toMatchObject({ code: 'auth/invalid-token' });
+    await expect(provider.verify(await sign(key, gotrueClaims(), { iss: forked }))).resolves.toBeTruthy();
+  });
+
+  it('fails closed when discovery fails or names no issuer, and retries on the next call', async () => {
+    const key = await makeKey('d3');
+    published = [key.jwk];
+    const provider = createGoTrueAuth({ url: base, discoverIssuer: true });
+    const token = await sign(key, gotrueClaims(), { iss: publicIssuer });
+    discovery = null;
+    await expect(provider.verify(token)).rejects.toMatchObject({ code: 'auth/invalid-token', message: expect.stringMatching(/404/) });
+    discovery = { issuer: '' };
+    await expect(provider.verify(token)).rejects.toMatchObject({ code: 'auth/invalid-token', message: expect.stringMatching(/GOTRUE_JWT_ISSUER/) });
+    discovery = { issuer: publicIssuer };
+    await expect(provider.verify(token)).resolves.toBeTruthy();
+    await expect(createGoTrueAuth({ url: 'http://127.0.0.1:1', discoverIssuer: true }).verify(token)).rejects.toMatchObject({
+      code: 'auth/invalid-token',
+    });
+  });
+
+  it('refuses issuer together with discoverIssuer', () => {
+    expect(() => createGoTrueAuth({ url: base, issuer: publicIssuer, discoverIssuer: true })).toThrow(/discoverIssuer/);
   });
 });

@@ -45,7 +45,7 @@ export { RBACAdapter, InMemoryRoleStore } from './authorization/rbac';
 export { CachedRoleStore, type RoleCache } from './authorization/cache';
 export { ApiKeyService, MemoryApiKeyStore, type ApiKeyRecord, type ApiKeyStore } from './api-keys';
 export { createAuthMiddleware } from './middleware';
-export type { AuthMiddlewareOptions } from './middleware';
+export type { AuthMiddlewareOptions, AuthenticatedContext } from './middleware';
 export { Auth, DefaultAuth } from './auth';
 export { BruteForceProtector, DEFAULT_BRUTE_FORCE_CONFIG } from './brute-force';
 export type { BruteForceConfig } from './brute-force';

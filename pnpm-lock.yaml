@@ -684,6 +684,9 @@ importers:
       '@mariachi/auth':
         specifier: workspace:*
         version: link:../auth
+      '@mariachi/auth-gotrue':
+        specifier: workspace:*
+        version: link:../auth-gotrue
       '@mariachi/communication':
         specifier: workspace:*
         version: link:../communication
@@ -702,6 +705,9 @@ importers:
       '@mariachi/lifecycle':
         specifier: workspace:*
         version: link:../lifecycle
+      '@mariachi/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       '@types/node':
         specifier: ^22
         version: 22.19.11
@@ -717,6 +723,9 @@ importers:
       vitest:
         specifier: ^3
         version: 3.2.4(@types/node@22.19.11)(jiti@2.7.0)(yaml@2.9.1)
+      yaml:
+        specifier: ^2
+        version: 2.9.1
       zod:
         specifier: ^3.24
         version: 3.25.76
@@ -1111,6 +1120,12 @@ importers:
         specifier: workspace:*
         version: link:../core
     devDependencies:
+      '@mariachi/api-facade':
+        specifier: workspace:*
+        version: link:../api-facade
+      '@mariachi/auth':
+        specifier: workspace:*
+        version: link:../auth
       tsup:
         specifier: ^8
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.9.1)

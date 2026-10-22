@@ -43,6 +43,8 @@
     "@mariachi/core": "workspace:*"
   },
   "devDependencies": {
+    "@mariachi/api-facade": "workspace:*",
+    "@mariachi/auth": "workspace:*",
     "typescript": "^5.7",
     "tsup": "^8",
     "vitest": "^3"
