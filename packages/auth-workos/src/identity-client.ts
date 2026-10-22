@@ -329,6 +329,9 @@ export class WorkOSIdentityClient implements IdentityClient {
       const { user } = await w.userManagement.resetPassword({ token: input.token, newPassword: input.password });
       return toUser(user);
     } catch (error) {
+      // A used or unknown token is a 404 (`password_reset_token_not_found`), not a failure of WorkOS.
+      const e = error as SdkError;
+      if (e?.status === 404) throw new AuthError('auth/invalid-grant', 'WorkOS refused the reset: the token is used or unknown', { status: 404, code: e.code });
       throw this.error(error, 'auth/invalid-grant');
     }
   }

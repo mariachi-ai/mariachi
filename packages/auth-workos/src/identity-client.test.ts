@@ -249,6 +249,13 @@ describe('WorkOSIdentityClient: sessions and users', () => {
       },
     });
     await expect(expired.client.resetPassword({ token: 'old', password: 'x' })).rejects.toMatchObject({ code: 'auth/invalid-grant' });
+    // A used token: WorkOS answers 404 password_reset_token_not_found (seen against staging).
+    const used = fakeSdk({
+      resetPassword: async () => {
+        throw sdkError('NotFoundException', { status: 404, code: 'password_reset_token_not_found' });
+      },
+    });
+    await expect(used.client.resetPassword({ token: 'used', password: 'x' })).rejects.toMatchObject({ code: 'auth/invalid-grant' });
   });
 
   it('email codes: the app gets the code to send, and the code signs in', async () => {
