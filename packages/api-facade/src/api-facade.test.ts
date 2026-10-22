@@ -154,4 +154,24 @@ describe('api-facade', () => {
     expect(doc.paths['/api/users/{id}'].get.security).toEqual([{ session: ['users:read'] }]);
     expect(doc.paths['/api/users/public/ping'].get.security).toEqual([]);
   });
+
+  it('configure: hooks run before auth, and raw routes can set cookies and redirect', async () => {
+    const s = app().configure((fastify) => {
+      // A session cookie becomes the bearer token the `session` strategy checks.
+      fastify.addHook('onRequest', async (req) => {
+        const sid = /(?:^|;\s*)sid=([^;]+)/.exec(req.headers.cookie ?? '')?.[1];
+        if (sid && !req.headers.authorization) req.headers.authorization = `Bearer ${sid}`;
+      });
+      fastify.get('/api/login/callback', async (_req, reply) => {
+        reply.header('set-cookie', 'sid=good; Path=/; HttpOnly; SameSite=Lax');
+        return reply.redirect('/dashboard', 302);
+      });
+    });
+    const callback = await s.inject({ method: 'GET', url: '/api/login/callback' });
+    expect(callback.statusCode).toBe(302);
+    expect(callback.headers.location).toBe('/dashboard');
+    expect(String(callback.headers['set-cookie'])).toContain('sid=good');
+    expect((await s.inject({ method: 'GET', url: `/api/users/${ID}`, headers: { cookie: 'sid=good' } })).statusCode).toBe(200);
+    expect((await s.inject({ method: 'GET', url: `/api/users/${ID}`, headers: { cookie: 'sid=nope' } })).statusCode).toBe(401);
+  });
 });
