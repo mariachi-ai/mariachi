@@ -35,6 +35,8 @@ describe('S3StorageAdapter (MinIO)', () => {
     expect(put.status).toBe(200);
     const read = await fetch(await storage.signedUrl('presigned.txt', { expiresIn: 60 }));
     expect(await read.text()).toBe('from the browser');
-    expect((await fetch(uploadUrl.replace(/X-Amz-Signature=[^&]+/, 'X-Amz-Signature=00'), { method: 'PUT', body: 'x' })).status).toBe(403);
+    // A well-formed signature that doesn't match (a malformed one is a 400 on some S3 servers).
+    const forged = uploadUrl.replace(/X-Amz-Signature=[^&]+/, `X-Amz-Signature=${'0'.repeat(64)}`);
+    expect((await fetch(forged, { method: 'PUT', body: 'x' })).status).toBe(403);
   });
 });
