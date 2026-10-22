@@ -34,7 +34,13 @@ function fakeSdk(overrides: Record<string, (...args: never[]) => unknown> = {}) 
     listUsers: vi.fn(async () => ({ data: [user({ email: 'Ada@Example.org' })] })),
     createUser: vi.fn(async (input: Record<string, unknown>) => user({ email: input.email, emailVerified: input.emailVerified })),
     deleteUser: vi.fn(async () => undefined),
-    createPasswordReset: vi.fn(async () => ({ id: 'password_reset_01' })),
+    createPasswordReset: vi.fn(async () => ({ id: 'password_reset_01', passwordResetToken: 'prt_1', passwordResetUrl: 'https://authkit.test/reset?token=prt_1', expiresAt: '2026-10-22T12:00:00.000Z' })),
+    resetPassword: vi.fn(async () => ({ user: user() })),
+    updateUser: vi.fn(async () => user()),
+    createMagicAuth: vi.fn(async () => ({ id: 'magic_auth_01', userId: 'user_01', email: 'ada@example.org', code: '123456', expiresAt: '2026-10-22T12:10:00.000Z' })),
+    authenticateWithMagicAuth: vi.fn(async () => ({ user: user(), accessToken: accessToken(), refreshToken: 'rt_1' })),
+    getEmailVerification: vi.fn(async () => ({ id: 'email_verification_01', code: '654321' })),
+    authenticateWithEmailVerification: vi.fn(async () => ({ user: user(), accessToken: accessToken(), refreshToken: 'rt_1' })),
     ...overrides,
   };
   const client = new WorkOSIdentityClient(CONFIG, { userManagement } as never);
@@ -212,16 +218,70 @@ describe('WorkOSIdentityClient: sessions and users', () => {
     expect(userManagement.deleteUser).toHaveBeenCalledWith('user_01');
   });
 
-  it('starts a password reset, and says nothing for an unknown address', async () => {
+  it('starts a password reset: the app gets the token and link to email; an unknown address is "nobody"', async () => {
     const { client, userManagement } = fakeSdk();
-    await client.sendPasswordReset('ada@example.org');
+    expect(await client.sendPasswordReset('ada@example.org')).toEqual({
+      deliveredBy: 'app',
+      token: 'prt_1',
+      url: 'https://authkit.test/reset?token=prt_1',
+      expiresAt: Date.parse('2026-10-22T12:00:00.000Z'),
+    });
     expect(userManagement.createPasswordReset).toHaveBeenCalledWith({ email: 'ada@example.org' });
     const unknown = fakeSdk({
       createPasswordReset: async () => {
         throw sdkError('NotFoundException', { status: 404 });
       },
     });
-    await expect(unknown.client.sendPasswordReset('nobody@example.org')).resolves.toBeUndefined();
+    expect(await unknown.client.sendPasswordReset('nobody@example.org')).toEqual({ deliveredBy: 'nobody' });
+    const providerSends = new WorkOSIdentityClient({ ...CONFIG, emailsSentBy: 'provider' }, { userManagement } as never);
+    expect(await providerSends.sendPasswordReset('ada@example.org')).toEqual({ deliveredBy: 'provider' });
+  });
+
+  it('resets a password with the token; sets one for a user', async () => {
+    const { client, userManagement } = fakeSdk();
+    expect((await client.resetPassword({ token: 'prt_1', password: 'new-pw' })).id).toBe('user_01');
+    expect(userManagement.resetPassword).toHaveBeenCalledWith({ token: 'prt_1', newPassword: 'new-pw' });
+    await client.setPassword('user_01', 'pw-2');
+    expect(userManagement.updateUser).toHaveBeenCalledWith({ userId: 'user_01', password: 'pw-2' });
+    const expired = fakeSdk({
+      resetPassword: async () => {
+        throw sdkError('BadRequestException', { status: 400, code: 'password_reset_token_expired' });
+      },
+    });
+    await expect(expired.client.resetPassword({ token: 'old', password: 'x' })).rejects.toMatchObject({ code: 'auth/invalid-grant' });
+    // A used token: WorkOS answers 404 password_reset_token_not_found (seen against staging).
+    const used = fakeSdk({
+      resetPassword: async () => {
+        throw sdkError('NotFoundException', { status: 404, code: 'password_reset_token_not_found' });
+      },
+    });
+    await expect(used.client.resetPassword({ token: 'used', password: 'x' })).rejects.toMatchObject({ code: 'auth/invalid-grant' });
+  });
+
+  it('email codes: the app gets the code to send, and the code signs in', async () => {
+    const { client, userManagement } = fakeSdk();
+    expect(await client.startEmailCode('ada@example.org', { ipAddress: '203.0.113.7' })).toEqual({ deliveredBy: 'app', code: '123456', expiresAt: Date.parse('2026-10-22T12:10:00.000Z') });
+    expect(userManagement.createMagicAuth).toHaveBeenCalledWith({ email: 'ada@example.org', ipAddress: '203.0.113.7', userAgent: undefined });
+    const out = await client.signInWithEmailCode({ email: 'ada@example.org', code: '123456' });
+    expect(out.status).toBe('signed-in');
+    expect(userManagement.authenticateWithMagicAuth).toHaveBeenCalledWith(expect.objectContaining({ clientId: 'client_01TEST', email: 'ada@example.org', code: '123456' }));
+    const wrong = fakeSdk({
+      authenticateWithMagicAuth: async () => {
+        throw sdkError('BadRequestException', { status: 400, code: 'invalid_one_time_code' });
+      },
+    });
+    await expect(wrong.client.signInWithEmailCode({ email: 'a@x', code: '000000' })).rejects.toMatchObject({ code: 'auth/invalid-grant' });
+  });
+
+  it('a held sign-in: the code to email, then finishing it', async () => {
+    const { client, userManagement } = fakeSdk();
+    const pending = { status: 'pending' as const, reason: 'email-verification' as const, pendingToken: 'pat_1', providerData: { emailVerificationId: 'email_verification_01' } };
+    expect(await client.pendingVerificationCode(pending)).toBe('654321');
+    expect(userManagement.getEmailVerification).toHaveBeenCalledWith('email_verification_01');
+    const out = await client.verifyEmailAndSignIn({ pendingToken: 'pat_1', code: '654321' });
+    expect(out.status).toBe('signed-in');
+    expect(userManagement.authenticateWithEmailVerification).toHaveBeenCalledWith(expect.objectContaining({ code: '654321', pendingAuthenticationToken: 'pat_1' }));
+    await expect(client.pendingVerificationCode({ status: 'pending', reason: 'mfa' })).rejects.toMatchObject({ code: 'auth/not-supported' });
   });
 });
 

@@ -73,6 +73,49 @@ describe.skipIf(!enabled)('WorkOS staging', () => {
     }
   });
 
+  it('verified-first sign-up: an email code signs in a verified user, who then sets a password', async () => {
+    const addr = email('signup');
+    const start = await identity.startEmailCode(addr);
+    if (start.deliveredBy !== 'app') throw new Error(`expected the app to send the code, got ${start.deliveredBy}`);
+    expect(start.code).toMatch(/^\d{6}$/);
+    const out = await identity.signInWithEmailCode({ email: addr, code: start.code });
+    if (out.status !== 'signed-in') throw new Error(`expected signed-in, got ${out.status}`);
+    created.push(out.user.id);
+    expect(out.user).toMatchObject({ email: addr, emailVerified: true });
+    const pw = password();
+    await identity.setPassword(out.user.id, pw);
+    const again = await identity.signInWithPassword({ email: addr, password: pw });
+    expect(again.status).toBe('signed-in');
+    await expect(identity.signInWithEmailCode({ email: addr, code: start.code })).rejects.toMatchObject({ code: 'auth/invalid-grant' });
+  });
+
+  it('password reset: a token for the app to email, then the new password works and the old one does not', async () => {
+    const addr = email('reset');
+    const oldPw = password();
+    const user = await identity.createUser({ email: addr, emailVerified: true, password: oldPw });
+    created.push(user.id);
+    const reset = await identity.sendPasswordReset(addr);
+    if (reset.deliveredBy !== 'app') throw new Error(`expected the app to send the link, got ${reset.deliveredBy}`);
+    const newPw = password();
+    expect((await identity.resetPassword({ token: reset.token, password: newPw })).id).toBe(user.id);
+    expect((await identity.signInWithPassword({ email: addr, password: newPw })).status).toBe('signed-in');
+    await expect(identity.signInWithPassword({ email: addr, password: oldPw })).rejects.toMatchObject({ code: 'auth/invalid-credentials' });
+    expect(await identity.sendPasswordReset(email('nobody'))).toEqual({ deliveredBy: 'nobody' });
+  });
+
+  it('a sign-in held at email verification: the app gets the code and finishes it', async () => {
+    const addr = email('held');
+    const pw = password();
+    const user = await identity.createUser({ email: addr, emailVerified: false, password: pw });
+    created.push(user.id);
+    const held = await identity.signInWithPassword({ email: addr, password: pw });
+    if (held.status !== 'pending') throw new Error('expected a pending sign-in');
+    const code = await identity.pendingVerificationCode(held);
+    const done = await identity.verifyEmailAndSignIn({ pendingToken: held.pendingToken!, code });
+    if (done.status !== 'signed-in') throw new Error(`expected signed-in, got ${done.status}`);
+    expect(done.user.emailVerified).toBe(true);
+  });
+
   it('finds users by id and email; a deleted user is gone', async () => {
     const addr = email('lookup');
     const user = await identity.createUser({ email: addr, emailVerified: true, name: 'Lookup Test' });

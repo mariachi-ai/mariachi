@@ -37,6 +37,9 @@ export type {
   CodeExchangeInput,
   SignOutInput,
   CreateIdentityUserInput,
+  EmailDelivery,
+  EmailCodeInput,
+  VerifyEmailInput,
 } from './identity';
 
 export type { AuthWebhookHandler, AuthWebhookEvent, AuthEventType } from './webhooks/types';

@@ -5,6 +5,8 @@ import type {
   AuthorizationUrlInput,
   CodeExchangeInput,
   CreateIdentityUserInput,
+  EmailCodeInput,
+  EmailDelivery,
   IdentityClient,
   IdentityRequestContext,
   IdentityUser,
@@ -147,6 +149,11 @@ export class FusionAuthIdentityClient implements IdentityClient {
       json: { loginId: input.email, password: input.password, applicationId: this.config.applicationId, ipAddress: input.ipAddress },
       ip: input.ipAddress,
     });
+    return this.loginResult(status, body, input.email, 'the login');
+  }
+
+  /** The Login API's answer (password or passwordless) as a SignInResult. */
+  private loginResult(status: number, body: Record<string, any>, email: string, what: string): SignInResult {
     // 200: signed in; 202: signed in but not registered for the application (no app roles).
     if ((status === 200 || status === 202) && typeof body.token === 'string' && body.user) {
       return {
@@ -156,14 +163,14 @@ export class FusionAuthIdentityClient implements IdentityClient {
       };
     }
     if (status === 212 || status === 213) {
-      return { status: 'pending', reason: 'email-verification', email: body.user?.email ?? input.email, ...(body.user ? { user: toUser(body.user) } : {}) };
+      return { status: 'pending', reason: 'email-verification', email: body.user?.email ?? email, ...(body.user ? { user: toUser(body.user) } : {}) };
     }
     if (status === 242) return { status: 'pending', reason: 'mfa', pendingToken: body.twoFactorId };
     // 404: no such user or a wrong password; 409: locked; 410: expired; 423: breached password.
     if ([404, 409, 410, 423].includes(status)) {
       throw new AuthError('auth/invalid-credentials', 'Invalid email or password', { status });
     }
-    throw this.fail(status, 'the login', 'auth/invalid-credentials');
+    throw this.fail(status, what, 'auth/invalid-credentials');
   }
 
   authorizationUrl(input: AuthorizationUrlInput): string {
@@ -261,14 +268,47 @@ export class FusionAuthIdentityClient implements IdentityClient {
     if (status !== 200 && status !== 404) throw this.fail(status, 'the user deletion', 'auth/invalid-grant');
   }
 
-  async sendPasswordReset(email: string): Promise<void> {
+  /** FusionAuth sends the reset email (its tenant's template) and resets on its own page. */
+  async sendPasswordReset(email: string): Promise<EmailDelivery<{ token: string; url?: string; expiresAt?: number }>> {
     const { status } = await this.call('POST', '/api/user/forgot-password', {
       json: { loginId: email, applicationId: this.config.applicationId, sendForgotPasswordEmail: true },
     });
-    // 404: no such user; say nothing, as for one that exists.
+    if (status === 404) return { deliveredBy: 'nobody' }; // answered as for an account
     if (status === 403) {
       throw new AuthError('auth/not-supported', "FusionAuth's tenant has no forgot-password email template", { status });
     }
-    if (status !== 200 && status !== 404) throw this.fail(status, 'the password reset', 'auth/invalid-grant');
+    if (status !== 200) throw this.fail(status, 'the password reset', 'auth/invalid-grant');
+    return { deliveredBy: 'provider' };
+  }
+
+  async resetPassword(): Promise<IdentityUser> {
+    throw new AuthError('auth/not-supported', "FusionAuth resets passwords on its own page (sendPasswordReset's email links there)");
+  }
+
+  async setPassword(userId: string, password: string): Promise<void> {
+    const { status } = await this.call('PATCH', `/api/user/${encodeURIComponent(userId)}`, { json: { user: { password } } });
+    if (status !== 200) throw this.fail(status, 'the password change', 'auth/invalid-grant');
+  }
+
+  /** FusionAuth's passwordless API: the app sends the code. */
+  async startEmailCode(email: string): Promise<EmailDelivery<{ code: string; expiresAt?: number }>> {
+    const { status, body } = await this.call('POST', '/api/passwordless/start', { json: { loginId: email, applicationId: this.config.applicationId } });
+    if (status === 404) return { deliveredBy: 'nobody' };
+    if (status !== 200 || typeof body.code !== 'string') throw this.fail(status, 'the passwordless start', 'auth/invalid-grant');
+    return { deliveredBy: 'app', code: body.code };
+  }
+
+  async signInWithEmailCode(input: EmailCodeInput): Promise<SignInResult> {
+    const { status, body } = await this.call('POST', '/api/passwordless/login', { json: { code: input.code, ipAddress: input.ipAddress }, ip: input.ipAddress });
+    if (status === 404) throw new AuthError('auth/invalid-grant', 'The code is wrong or expired', { status });
+    return this.loginResult(status, body, input.email, 'the passwordless login');
+  }
+
+  async pendingVerificationCode(): Promise<string> {
+    throw new AuthError('auth/not-supported', 'FusionAuth sends its own verification emails');
+  }
+
+  async verifyEmailAndSignIn(): Promise<SignInResult> {
+    throw new AuthError('auth/not-supported', 'FusionAuth verifies emails through its own link');
   }
 }

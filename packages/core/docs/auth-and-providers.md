@@ -77,6 +77,7 @@ await identity.signOut({ sessionId: tokens.sessionId, refreshToken });
 - **`emailVerified` is the provider's own answer** to "does this person control this inbox", never a flag that is true for everyone. Link accounts by email and accept invitations only when it's true.
 - **Errors** are `AuthError`s: `auth/invalid-credentials`, `auth/invalid-grant` (a refused code, verifier or refresh token), `auth/rate-limited`, `auth/not-supported`, `auth/identity-provider` (unreachable or unexpected).
 - **Server-side only**: the client holds the provider's API key or client secret.
+- **Emails**: `startEmailCode`, `pendingVerificationCode` and `sendPasswordReset` return what to email when the app sends its own (`{ deliveredBy: 'app', code | token }`), `{ deliveredBy: 'provider' }` when the provider does, and `{ deliveredBy: 'nobody' }` for an address with no account (answer as if there were one). Verified-first sign-up: `startEmailCode` → `signInWithEmailCode` (the code proves the inbox) → `setPassword`.
 
 ## Webhooks
 

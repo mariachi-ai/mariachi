@@ -93,6 +93,24 @@ export interface SignOutInput {
   refreshToken?: string;
 }
 
+/**
+ * Who sends an email the provider asks for: the provider itself, the app (with the code or token
+ * to put in it: providers whose own emails are off), or nobody (no such account; answer the same
+ * way as for one, so the reply never reveals which addresses exist).
+ */
+export type EmailDelivery<T> = { deliveredBy: 'provider' } | { deliveredBy: 'nobody' } | ({ deliveredBy: 'app' } & T);
+
+export interface EmailCodeInput extends IdentityRequestContext {
+  email: string;
+  code: string;
+}
+
+export interface VerifyEmailInput extends IdentityRequestContext {
+  /** `pendingToken` from a sign-in held at `email-verification`. */
+  pendingToken: string;
+  code: string;
+}
+
 export interface CreateIdentityUserInput {
   email: string;
   /** Only when the app itself has proven the address (e.g. an invitation link it emailed). */
@@ -116,6 +134,21 @@ export interface IdentityClient {
   findUserByEmail(email: string): Promise<IdentityUser | null>;
   createUser(input: CreateIdentityUserInput): Promise<IdentityUser>;
   deleteUser(id: string): Promise<void>;
-  /** Starts a password reset. The email goes out the provider's way (its own, or an event the app sends from). */
-  sendPasswordReset(email: string): Promise<void>;
+  /** Starts a password reset: the provider emails it, or the app does with the returned token (and link). */
+  sendPasswordReset(email: string): Promise<EmailDelivery<{ token: string; url?: string; expiresAt?: number }>>;
+  /** Sets a new password with a reset token; the user it belongs to. */
+  resetPassword(input: { token: string; password: string }): Promise<IdentityUser>;
+  /** Sets a user's password (an admin action: the app has already decided who may). */
+  setPassword(userId: string, password: string): Promise<void>;
+  /**
+   * A one-time code that proves the inbox (sign-up, passwordless sign-in). The provider may create
+   * a passwordless, unverified user for a new address.
+   */
+  startEmailCode(email: string, context?: IdentityRequestContext): Promise<EmailDelivery<{ code: string; expiresAt?: number }>>;
+  /** Signs in with that code; the user's email is verified by it. */
+  signInWithEmailCode(input: EmailCodeInput): Promise<SignInResult>;
+  /** The code to email for a sign-in held at `email-verification`, when the app sends emails. */
+  pendingVerificationCode(pending: Extract<SignInResult, { status: 'pending' }>): Promise<string>;
+  /** Finishes a sign-in held at `email-verification` with the code from that email. */
+  verifyEmailAndSignIn(input: VerifyEmailInput): Promise<SignInResult>;
 }

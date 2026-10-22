@@ -68,4 +68,9 @@ export interface WorkOSIdentityClientConfig {
    * The provider names WorkOS uses for Google and GitHub. Defaults `GoogleOAuth` and `GitHubOAuth`.
    */
   providerNames?: Partial<Record<'google' | 'github', string>>;
+  /**
+   * Who sends the codes and links: `app` (the default: WorkOS's own emails are off in the
+   * Dashboard, and the app emails what these calls return) or `provider` (WorkOS sends them).
+   */
+  emailsSentBy?: 'app' | 'provider';
 }
