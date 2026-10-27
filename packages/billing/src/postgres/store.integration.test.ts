@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applySchema, createPostgresDatabase, type PostgresDatabase } from '@mariachi/database-postgres';
 import { startPostgres, stopAll } from '../../../../test/setup';
 import { DrizzleBillingStore, billingTables } from './index';
-import type { Subscription } from '../types';
+import type { Plan, Subscription } from '../types';
 
 let database: PostgresDatabase;
 let store: DrizzleBillingStore;
@@ -13,6 +13,7 @@ const sub = (status: Subscription['status']): Subscription => ({
   tenantId: 't1',
   planId: 'price_pro',
   quantity: 1,
+  items: [{ id: 'si_pg', priceId: 'price_pro', quantity: 1 }],
   status,
   currentPeriodStart: null,
   currentPeriodEnd: null,
@@ -83,12 +84,113 @@ describe('DrizzleBillingStore', () => {
   });
 
   it('mirrors plans and ignores stale price events', async () => {
-    const plan = { id: 'price_pg', productId: 'prod_1', name: 'Pro', description: null, amount: 2000, currency: 'usd', interval: 'month' as const, active: true, metadata: { tier: 'pro' } };
+    const plan: Plan = {
+      id: 'price_pg',
+      productId: 'prod_1',
+      name: 'Pro',
+      description: null,
+      amount: 2000,
+      currency: 'usd',
+      interval: 'month',
+      active: true,
+      lookupKey: null,
+      metadata: { tier: 'pro' },
+      productMetadata: {},
+    };
     await store.upsertPlan(plan, new Date(2000));
     await store.upsertPlan({ ...plan, amount: 1000 }, new Date(1000));
     expect(await store.listPlans()).toMatchObject([{ id: 'price_pg', amount: 2000, metadata: { tier: 'pro' } }]);
     await store.upsertPlan({ ...plan, active: false }, new Date(3000));
     expect(await store.listPlans()).toEqual([]);
     expect(await store.listPlans({ activeOnly: false })).toHaveLength(1);
+  });
+
+  it('persists every subscription item', async () => {
+    const items = [
+      { id: 'si_seat', priceId: 'price_seat', quantity: 3 },
+      { id: 'si_metered', priceId: 'price_metered', quantity: null },
+    ];
+    await store.upsertSubscription({ ...sub('active'), id: 'sub_items', planId: 'price_seat', quantity: 3, items }, new Date(1000));
+    expect((await store.findSubscription('sub_items'))?.items).toEqual(items);
+    await store.upsertSubscription({ ...sub('active'), id: 'sub_items', items: items.slice(1) }, new Date(2000));
+    expect((await store.findSubscription('sub_items'))?.items).toEqual(items.slice(1));
+  });
+
+  it('mirrors lookup keys and product metadata', async () => {
+    const base: Plan = {
+      id: 'price_lk_a',
+      productId: 'prod_lk',
+      name: 'A',
+      description: null,
+      amount: 100,
+      currency: 'usd',
+      interval: 'month',
+      active: true,
+      lookupKey: 'lk_a',
+      metadata: {},
+      productMetadata: { allowance: '1000' },
+    };
+    await store.upsertPlan(base, new Date(1000));
+    await store.upsertPlan({ ...base, id: 'price_lk_b', lookupKey: 'lk_b', amount: 200, active: false }, new Date(1000));
+    expect(await store.findPlan('price_lk_a')).toEqual(base);
+    expect(await store.findPlan('price_missing')).toBeNull();
+    expect((await store.listPlans({ lookupKeys: ['lk_a', 'lk_b'] })).map((p) => p.id)).toEqual(['price_lk_a']);
+    expect((await store.listPlans({ lookupKeys: ['lk_a', 'lk_b'], activeOnly: false })).map((p) => p.id)).toEqual(['price_lk_a', 'price_lk_b']);
+    expect(await store.listPlans({ lookupKeys: [] })).toEqual([]);
+  });
+
+  it('sets the ledger balance atomically with concurrent consumes', async () => {
+    const base = { tenantId: 't1', customerId: 'cus_set', currency: 'usd', description: 'x' };
+    await store.appendCreditTransaction({ ...base, amount: 100, idempotencyKey: 'set-grant' });
+    await Promise.all([
+      ...Array.from({ length: 10 }, (_, i) => store.appendCreditTransaction({ ...base, amount: -10, idempotencyKey: `set-use-${i}` }).catch(() => null)),
+      store.setCreditLedgerBalance({ ...base, idempotencyKey: 'set-period-1' }, 500),
+      ...Array.from({ length: 10 }, (_, i) => store.appendCreditTransaction({ ...base, amount: -10, idempotencyKey: `set-use-b${i}` }).catch(() => null)),
+    ]);
+    // Every entry continues the previous one's balance, and the reset landed exactly on 500.
+    const entries = (await store.listCreditTransactions('t1', 'cus_set', { limit: 100 })).reverse();
+    let running = 0;
+    for (const entry of entries) {
+      running += entry.amount;
+      expect(entry.balanceAfter).toBe(running);
+    }
+    expect(entries.find((e) => e.idempotencyKey === 'set-period-1')?.balanceAfter).toBe(500);
+    expect(await store.getCreditLedgerBalance('t1', 'cus_set', 'usd')).toBe(running);
+
+    const replay = await store.setCreditLedgerBalance({ ...base, idempotencyKey: 'set-period-1' }, 900);
+    expect(replay?.balanceAfter).toBe(500);
+    expect(await store.setCreditLedgerBalance({ ...base, idempotencyKey: null }, running)).toBeNull();
+    expect(await store.setCreditLedgerBalance({ ...base, idempotencyKey: 'set-period-2' }, running)).toMatchObject({ amount: 0, balanceAfter: running });
+    expect(await store.setCreditLedgerBalance({ ...base, currency: 'mcr', idempotencyKey: 'set-mcr' }, -25)).toMatchObject({ amount: -25, currency: 'mcr' });
+    expect(await store.getCreditLedgerBalance('t1', 'cus_set', 'mcr')).toBe(-25);
+  });
+
+  it('stores dimensions and sums by one of them', async () => {
+    const base = { tenantId: 't1', customerId: 'cus_dim', currency: 'usd', description: 'x' };
+    await store.appendCreditTransaction({ ...base, amount: 1000, idempotencyKey: 'dim-grant' });
+    await store.appendCreditTransaction({ ...base, amount: -100, idempotencyKey: 'dim-1', dimensions: { project: 'p1', region: 'eu' } });
+    await store.appendCreditTransaction({ ...base, amount: -50, idempotencyKey: 'dim-2', dimensions: { project: 'p1' } });
+    await store.appendCreditTransaction({ ...base, amount: 20, idempotencyKey: 'dim-3', dimensions: { project: 'p2' } });
+    const range = { from: new Date(0), to: new Date(Date.now() + 60_000) };
+    expect(await store.summarizeCreditsByDimension('t1', 'cus_dim', 'usd', range, 'project')).toEqual([
+      { value: 'p1', credited: 0, debited: 150 },
+      { value: 'p2', credited: 20, debited: 0 },
+      { value: null, credited: 1000, debited: 0 },
+    ]);
+    expect(await store.summarizeCreditsByDimension('t1', 'cus_dim', 'usd', range, 'region')).toEqual([
+      { value: 'eu', credited: 0, debited: 100 },
+      { value: null, credited: 1020, debited: 50 },
+    ]);
+    const [latest] = await store.listCreditTransactions('t1', 'cus_dim', { limit: 1 });
+    expect(latest.dimensions).toEqual({ project: 'p2' });
+
+    const rec = { tenantId: 't1', customerId: 'cus_dim', metricName: 'requests', timestamp: new Date() };
+    await store.recordUsage({ ...rec, quantity: 3, idempotencyKey: 'dim-u1', dimensions: { project: 'p1' } });
+    await store.recordUsage({ ...rec, quantity: 4, idempotencyKey: 'dim-u2', dimensions: { project: 'p1' } });
+    await store.recordUsage({ ...rec, quantity: 5, idempotencyKey: 'dim-u3' });
+    expect(await store.summarizeUsageByDimension('t1', 'requests', range, 'project')).toEqual([
+      { value: 'p1', totalQuantity: 7 },
+      { value: null, totalQuantity: 5 },
+    ]);
   });
 });

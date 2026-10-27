@@ -10,6 +10,7 @@ export const billingUsageRecordsTable = defineTable(
     quantity:       column.bigint().notNull(),
     timestamp:      column.timestamp().notNull(),
     idempotencyKey: column.text(),
+    dimensions:     column.json().$type<Record<string, string>>(),
     createdAt:      column.timestamp().notNull().defaultNow(),
   },
   {

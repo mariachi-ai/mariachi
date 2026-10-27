@@ -142,6 +142,13 @@ export async function normalizeAndSync(event: ProviderEvent, store?: BillingStor
     case 'price.deleted': {
       const plan = mapPrice(obj);
       if (event.type === 'price.deleted') plan.active = false;
+      // Price events carry the product as a bare id: keep the product fields `syncPlans` mirrored.
+      const stored = typeof obj.product === 'string' ? await store?.findPlan(plan.id) : null;
+      if (stored) {
+        plan.description = stored.description;
+        plan.productMetadata = stored.productMetadata;
+        if (!obj.nickname) plan.name = stored.name;
+      }
       await store?.upsertPlan(plan, event.createdAt);
       return [{ ...base, type: 'plan.synced', tenantId: null, plan }];
     }

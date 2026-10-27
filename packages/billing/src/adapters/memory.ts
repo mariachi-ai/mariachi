@@ -17,8 +17,11 @@ import type {
   ProviderEvent,
   Refund,
   Subscription,
+  SubscriptionItem,
+  SubscriptionItemInput,
   UpdateSubscriptionInput,
 } from '../types';
+import { requestedItems } from '../types';
 
 /**
  * In-memory provider with Stripe-compatible webhook signatures
@@ -29,6 +32,8 @@ export class MemoryBillingAdapter implements BillingAdapter {
   readonly customers = new Map<string, Customer>();
   readonly subscriptions = new Map<string, Subscription>();
   readonly charges = new Map<string, Charge>();
+  /** Checkout sessions created, with the line items they were given. */
+  readonly checkouts = new Map<string, CreateCheckoutInput & { items: SubscriptionItemInput[] }>();
   readonly usage: Array<{ customerId: string; metricName: string; quantity: number; timestamp: Date; idempotencyKey?: string }> = [];
   readonly plans: Plan[] = [];
   private readonly balances = new Map<string, number>();
@@ -54,6 +59,19 @@ export class MemoryBillingAdapter implements BillingAdapter {
     const c = this.customers.get(id);
     if (!c) throw new BillingError('billing/not-found', `No such customer: ${id}`);
     return c;
+  }
+
+  private toItems(items: SubscriptionItemInput[], current: SubscriptionItem[] = []): SubscriptionItem[] {
+    if (items.length === 0) throw new BillingError('billing/invalid-input', 'At least one price is required');
+    return items.map((i) => {
+      const kept = current.find((c) => c.priceId === i.priceId);
+      return { id: kept?.id ?? this.nextId('si'), priceId: i.priceId, quantity: i.quantity ?? kept?.quantity ?? null };
+    });
+  }
+
+  /** `planId` and `quantity` follow the first item, as the Stripe mapping does. */
+  private withItems(sub: Subscription, items: SubscriptionItem[]): Subscription {
+    return { ...sub, items, planId: items[0]?.priceId ?? sub.planId, quantity: items[0]?.quantity ?? 1 };
   }
 
   private requireSubscription(id: string): Subscription {
@@ -92,12 +110,14 @@ export class MemoryBillingAdapter implements BillingAdapter {
     return this.once(opts, () => {
       const customer = this.requireCustomer(input.customerId);
       const now = Date.now();
+      const items = this.toItems(requestedItems(input));
       const sub: Subscription = {
         id: this.nextId('sub'),
         customerId: input.customerId,
         tenantId: customer.tenantId,
-        planId: input.priceId,
-        quantity: input.quantity ?? 1,
+        planId: items[0].priceId,
+        quantity: items[0].quantity ?? 1,
+        items,
         status: input.trialDays ? 'trialing' : 'active',
         currentPeriodStart: new Date(now),
         currentPeriodEnd: new Date(now + 30 * 86_400_000),
@@ -114,12 +134,14 @@ export class MemoryBillingAdapter implements BillingAdapter {
 
   async updateSubscription(id: string, patch: UpdateSubscriptionInput): Promise<Subscription> {
     const s = this.requireSubscription(id);
-    const next: Subscription = {
-      ...s,
-      planId: patch.priceId ?? s.planId,
-      quantity: patch.quantity ?? s.quantity,
-      metadata: { ...s.metadata, ...patch.metadata },
-    };
+    let items = s.items;
+    if (patch.items) {
+      items = this.toItems(patch.items, s.items);
+    } else if ((patch.priceId || patch.quantity !== undefined) && s.items[0]) {
+      const [first, ...rest] = s.items;
+      items = [{ ...first, priceId: patch.priceId ?? first.priceId, quantity: patch.quantity ?? first.quantity }, ...rest];
+    }
+    const next = this.withItems({ ...s, metadata: { ...s.metadata, ...patch.metadata } }, items);
     this.subscriptions.set(id, next);
     return next;
   }
@@ -202,10 +224,15 @@ export class MemoryBillingAdapter implements BillingAdapter {
     });
   }
 
-  async createCheckoutSession(input: CreateCheckoutInput): Promise<CheckoutSession> {
-    this.requireCustomer(input.customerId);
-    const id = this.nextId('cs');
-    return { id, url: `https://checkout.memory.local/${id}` };
+  async createCheckoutSession(input: CreateCheckoutInput, opts?: IdempotencyOptions): Promise<CheckoutSession> {
+    return this.once(opts, () => {
+      this.requireCustomer(input.customerId);
+      const items = input.items ?? requestedItems({ ...input, quantity: input.quantity ?? 1 });
+      if (items.length === 0) throw new BillingError('billing/invalid-input', 'At least one price is required');
+      const id = this.nextId('cs');
+      this.checkouts.set(id, { ...input, items });
+      return { id, url: `https://checkout.memory.local/${id}` };
+    });
   }
 
   async createPortalSession(customerId: string, returnUrl: string): Promise<PortalSession> {
@@ -217,8 +244,10 @@ export class MemoryBillingAdapter implements BillingAdapter {
     return [];
   }
 
-  async listPlans(options: { activeOnly?: boolean } = {}): Promise<Plan[]> {
-    return options.activeOnly === false ? [...this.plans] : this.plans.filter((p) => p.active);
+  async listPlans(options: { activeOnly?: boolean; lookupKeys?: string[] } = {}): Promise<Plan[]> {
+    return this.plans.filter(
+      (p) => (options.activeOnly === false || p.active) && (!options.lookupKeys || (p.lookupKey !== null && options.lookupKeys.includes(p.lookupKey))),
+    );
   }
 
   async reportUsage(input: { customerId: string; metricName: string; quantity: number; timestamp: Date; idempotencyKey?: string }): Promise<void> {

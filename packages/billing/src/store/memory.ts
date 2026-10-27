@@ -5,6 +5,7 @@ import type {
   Charge,
   Plan,
   StoredWebhookEvent,
+  CreditSummary,
   CreditTransaction,
   Customer,
   DateRange,
@@ -13,10 +14,23 @@ import type {
   Refund,
   Subscription,
   SubscriptionStatus,
+  UsageBreakdown,
   UsageRecord,
   UsageSummary,
   WebhookEventStatus,
 } from '../types';
+
+type LedgerEntry = Omit<CreditTransaction, 'id' | 'amount' | 'balanceAfter' | 'createdAt'>;
+
+/** Groups by `dimensions[key]`, ordered by value with the unlabelled group (`null`) last. */
+function groupByDimension<T extends { dimensions?: Record<string, string> | null }>(rows: T[], key: string): Array<[string | null, T[]]> {
+  const groups = new Map<string | null, T[]>();
+  for (const row of rows) {
+    const value = row.dimensions?.[key] ?? null;
+    groups.set(value, [...(groups.get(value) ?? []), row]);
+  }
+  return [...groups.entries()].sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : a < b ? -1 : a > b ? 1 : 0));
+}
 
 interface Versioned<T> {
   value: T;
@@ -103,8 +117,15 @@ export class MemoryBillingStore implements BillingStore {
     this.upsert(this.plans, plan.id, plan, occurredAt);
   }
 
-  async listPlans(options: { activeOnly?: boolean } = {}): Promise<Plan[]> {
-    return [...this.plans.values()].map((v) => v.value).filter((p) => !(options.activeOnly ?? true) || p.active);
+  async findPlan(id: string): Promise<Plan | null> {
+    return this.plans.get(id)?.value ?? null;
+  }
+
+  async listPlans(options: { activeOnly?: boolean; lookupKeys?: string[] } = {}): Promise<Plan[]> {
+    return [...this.plans.values()]
+      .map((v) => v.value)
+      .filter((p) => !(options.activeOnly ?? true) || p.active)
+      .filter((p) => !options.lookupKeys || (p.lookupKey !== null && options.lookupKeys.includes(p.lookupKey)));
   }
 
   async recordWebhookEvent(event: { id: string; type: string; status: WebhookEventStatus; error?: string; payload?: unknown }): Promise<void> {
@@ -135,37 +156,83 @@ export class MemoryBillingStore implements BillingStore {
     return true;
   }
 
+  private usageIn(tenantId: string, metricName: string, range: DateRange): UsageRecord[] {
+    return this.usage.filter((u) => u.tenantId === tenantId && u.metricName === metricName && u.timestamp >= range.from && u.timestamp < range.to);
+  }
+
   async summarizeUsage(tenantId: string, metricName: string, range: DateRange): Promise<UsageSummary> {
-    const totalQuantity = this.usage
-      .filter((u) => u.tenantId === tenantId && u.metricName === metricName && u.timestamp >= range.from && u.timestamp < range.to)
-      .reduce((sum, u) => sum + u.quantity, 0);
+    const totalQuantity = this.usageIn(tenantId, metricName, range).reduce((sum, u) => sum + u.quantity, 0);
     return { metricName, totalQuantity, periodStart: range.from, periodEnd: range.to };
+  }
+
+  async summarizeUsageByDimension(tenantId: string, metricName: string, range: DateRange, groupBy: string): Promise<UsageBreakdown['groups']> {
+    return groupByDimension(this.usageIn(tenantId, metricName, range), groupBy).map(([value, rows]) => ({
+      value,
+      totalQuantity: rows.reduce((sum, u) => sum + u.quantity, 0),
+    }));
   }
 
   async appendCreditTransaction(
     entry: Omit<CreditTransaction, 'id' | 'balanceAfter' | 'createdAt'>,
     options: { allowNegative?: boolean } = {},
   ): Promise<CreditTransaction> {
-    if (entry.idempotencyKey) {
-      const existing = this.ledger.find((t) => t.tenantId === entry.tenantId && t.idempotencyKey === entry.idempotencyKey);
-      if (existing) return existing;
-    }
-    const current = await this.getCreditLedgerBalance(entry.tenantId, entry.customerId, entry.currency);
+    // Synchronous from the idempotency check to the push, so concurrent calls can't interleave.
+    const existing = this.findByKey(entry);
+    if (existing) return existing;
+    const current = this.balanceOf(entry.tenantId, entry.customerId, entry.currency);
     const balanceAfter = current + entry.amount;
     if (balanceAfter < 0 && !options.allowNegative) {
       throw new BillingError('billing/insufficient-credits', 'Insufficient credits', { balance: current, requested: -entry.amount });
     }
-    const tx: CreditTransaction = { ...entry, id: randomUUID(), balanceAfter, createdAt: new Date() };
+    return this.push(entry, entry.amount, balanceAfter);
+  }
+
+  async setCreditLedgerBalance(entry: LedgerEntry, targetBalance: number): Promise<CreditTransaction | null> {
+    const existing = this.findByKey(entry);
+    if (existing) return existing;
+    const amount = targetBalance - this.balanceOf(entry.tenantId, entry.customerId, entry.currency);
+    if (amount === 0 && !entry.idempotencyKey) return null;
+    return this.push(entry, amount, targetBalance);
+  }
+
+  private findByKey(entry: LedgerEntry): CreditTransaction | undefined {
+    if (!entry.idempotencyKey) return undefined;
+    return this.ledger.find((t) => t.tenantId === entry.tenantId && t.idempotencyKey === entry.idempotencyKey);
+  }
+
+  private push(entry: LedgerEntry, amount: number, balanceAfter: number): CreditTransaction {
+    const tx: CreditTransaction = { ...entry, amount, id: randomUUID(), balanceAfter, createdAt: new Date() };
     this.ledger.push(tx);
     return tx;
   }
 
-  async getCreditLedgerBalance(tenantId: string, customerId: string, currency: string): Promise<number> {
+  private balanceOf(tenantId: string, customerId: string, currency: string): number {
     for (let i = this.ledger.length - 1; i >= 0; i--) {
       const t = this.ledger[i];
       if (t.tenantId === tenantId && t.customerId === customerId && t.currency === currency) return t.balanceAfter;
     }
     return 0;
+  }
+
+  async getCreditLedgerBalance(tenantId: string, customerId: string, currency: string): Promise<number> {
+    return this.balanceOf(tenantId, customerId, currency);
+  }
+
+  async summarizeCreditsByDimension(
+    tenantId: string,
+    customerId: string,
+    currency: string,
+    range: DateRange,
+    groupBy: string,
+  ): Promise<CreditSummary['groups']> {
+    const entries = this.ledger.filter(
+      (t) => t.tenantId === tenantId && t.customerId === customerId && t.currency === currency && t.createdAt >= range.from && t.createdAt < range.to,
+    );
+    return groupByDimension(entries, groupBy).map(([value, rows]) => ({
+      value,
+      credited: rows.reduce((sum, t) => sum + Math.max(t.amount, 0), 0),
+      debited: rows.reduce((sum, t) => sum + Math.max(-t.amount, 0), 0),
+    }));
   }
 
   async listCreditTransactions(tenantId: string, customerId: string, options: { limit?: number } = {}): Promise<CreditTransaction[]> {

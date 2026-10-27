@@ -1,1 +1,1 @@
-export { DrizzleNotificationStore } from './store';
+export { DrizzleNotificationStore, notificationTables } from './store';

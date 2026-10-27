@@ -14,7 +14,7 @@ Guide: [notifications.md](../core/docs/notifications.md)
 | --- | --- |
 | `@mariachi/notifications` | Service, channel adapters, memory stores, job schema, types |
 | `@mariachi/notifications/schema` | `notifications`, `notification_preferences`, `notification_deliveries` tables |
-| `@mariachi/notifications/postgres` | `DrizzleNotificationStore` (inbox, preferences and deliveries in one) |
+| `@mariachi/notifications/postgres` | `DrizzleNotificationStore` (inbox, preferences and deliveries in one), `notificationTables` (compiled tables for drizzle-kit) |
 
 ## Public API
 

@@ -29,8 +29,9 @@ const stripeWebhooks = createBillingWebhookHandler({
 }, instrumentation);
 ```
 
-Add the tables from `@mariachi/billing/schema` to your schema so `mariachi db generate` creates them.
-Use `adapter: 'memory'` (with `MemoryBillingStore`) in tests.
+Add the tables from `@mariachi/billing/schema` to your schema so `mariachi db generate` creates them,
+and run it again after upgrading the package, since new versions can add columns. Use
+`adapter: 'memory'` (with `MemoryBillingStore`) in tests.
 
 ## Every call is tenant-scoped
 
@@ -49,6 +50,35 @@ if (!(await billing.hasActiveSubscription(ctx, ['price_pro', 'price_team']))) {
 ```
 
 `hasActiveSubscription` counts `active`, `trialing` and `past_due` (`ENTITLED_STATUSES`).
+
+## Several prices on one subscription
+
+Pass `items` instead of `priceId` to put several prices on one subscription, for example a base
+fee plus a metered price. Give exactly one of the two (`billing/invalid-input` otherwise). Leave
+`quantity` off a metered price: Stripe rejects a quantity there, so it is only sent when you give
+one.
+
+```ts
+const sub = await billing.subscribe(ctx, {
+  items: [{ priceId: 'price_base', quantity: 5 }, { priceId: 'price_usage' }],
+  idempotencyKey: `signup:${org.id}`,
+});
+sub.items;   // [{ id: 'si_…', priceId: 'price_base', quantity: 5 }, { id: 'si_…', priceId: 'price_usage', quantity: null }]
+sub.planId;  // 'price_base': the first item's price
+
+// Replaces the item set: price_base is kept with the new quantity, price_usage removed, price_extra added.
+await billing.changePlan(ctx, sub.id, {
+  items: [{ priceId: 'price_base', quantity: 8 }, { priceId: 'price_extra' }],
+  prorationBehavior: 'create_prorations',
+});
+
+await billing.createCheckout(ctx, { mode: 'subscription', items: [{ priceId: 'price_base', quantity: 1 }, { priceId: 'price_usage' }], successUrl, cancelUrl });
+```
+
+`planId` and `quantity` describe the first item; `hasActiveSubscription(ctx, planIds)` matches any
+item's price. With `items`, checkout sends a quantity only when you give one, so give it for
+licensed prices. The single-price form (`priceId`, `quantity`) works as before: on `changePlan` it
+changes the first item only.
 
 ## Money movement and idempotency
 
@@ -70,6 +100,21 @@ Amounts are integers in the currency's minor unit (cents).
 webhooks keep the mirror current after that. `listPlans(ctx)` reads the mirror once it has rows,
 and Stripe otherwise; pass `{ source: 'provider' }` to always ask Stripe.
 
+Give prices a Stripe lookup key and refer to plans by it rather than by price id, so a price can be
+replaced (move the key with `transfer_lookup_key`) without a deploy:
+
+```ts
+const pro = await billing.findPlanByLookupKey(ctx, 'pro_monthly');   // mirror first, then Stripe; null if none
+await billing.listPlans(ctx, { lookupKeys: ['pro_monthly', 'pro_yearly'] });
+Number(pro?.productMetadata.allowance ?? 0);                           // the product's metadata
+```
+
+`Plan.lookupKey` is the price's `lookup_key`, `metadata` the price's metadata and `productMetadata`
+the product's. `findPlanByLookupKey` can return an archived price (check `active`). `listPlans`
+with `lookupKeys` asks Stripe when the mirror lacks one of the keys. Price webhooks carry only the
+product id, so the mirror keeps the product fields from the last `syncPlans`: run it again after
+changing a product.
+
 ## Usage and credits
 
 ```ts
@@ -85,6 +130,64 @@ Usage is recorded locally first (deduplicated by key), then reported to Stripe. 
 local and append-only: each entry stores `balanceAfter`, computed under a per-customer Postgres
 advisory lock, so concurrent consumers can't overdraw. Insufficient balance throws
 `billing/insufficient-credits` (HTTP 402) unless you pass `allowNegative`.
+
+### The ledger's unit
+
+A ledger is kept per `currency`, which is any 3-letter unit code: an ISO currency (`usd`) or a unit
+of your own, so a ledger can hold credits rather than money. Amounts are integers in that unit,
+so pick a unit small enough to need no fractions, for example `mcr` for millicredits:
+
+```ts
+await billing.grantCredits(ctx, 5_000, { currency: 'mcr', description: 'Starter pack', idempotencyKey: `pack:${order.id}` });
+await billing.consumeCredits(ctx, 1_250, { currency: 'mcr', description: 'Job', referenceType: 'job', referenceId: job.id });
+await billing.getCreditBalance(ctx, 'mcr');   // 3_750; each unit has its own balance
+```
+
+Codes are lowercased, and `defaultCurrency` is the unit used when you pass none.
+
+### Allowances that reset
+
+`setCreditBalance(ctx, target, options)` appends the one entry that brings the balance to exactly
+`target`, computed under the same lock as consumption, so a concurrent consume lands either before
+or after the reset, never half way. For a monthly allowance that doesn't roll over, reset at each
+period start with a key per period:
+
+```ts
+const result = await billing.setCreditBalance(ctx, plan.allowance, {
+  currency: 'mcr',
+  description: 'Monthly allowance',
+  idempotencyKey: `allowance:${sub.id}:${sub.currentPeriodStart!.toISOString()}`,
+});
+// { changed: true, balance: 10_000, transaction: { amount: 6_250, ... } }
+```
+
+`target` is any integer (a negative one records a debt). When the balance already is the target,
+`changed` is false: without an `idempotencyKey` nothing is recorded (`transaction: null`); with one,
+a zero-amount entry claims the key, so a retry of the same reset after the customer has spent
+stays a no-op instead of refilling. Reusing a key returns the original entry, as with
+`grantCredits`.
+
+### Breakdowns by dimension
+
+Ledger entries and usage records take optional `dimensions`, string labels of your own (at most
+16 keys, keys and values up to 128 characters), to attribute spend to a sub-account, region, cost
+centre or anything else. Read them back summed per value of one key:
+
+```ts
+await billing.consumeCredits(ctx, 40, { description: 'Run', dimensions: { project: project.id, region: 'eu' } });
+await billing.reportUsage(ctx, { metricName: 'api_calls', quantity: 1, dimensions: { project: project.id } });
+
+await billing.summarizeCredits(ctx, { from: monthStart, to: now, groupBy: 'project' });
+// { currency: 'usd', groupBy: 'project', groups: [{ value: 'prj_1', credited: 0, debited: 40 }, { value: null, ... }] }
+await billing.getUsageBreakdown(ctx, 'api_calls', { from: monthStart, to: now, groupBy: 'project' });
+// { metricName: 'api_calls', groupBy: 'project', groups: [{ value: 'prj_1', totalQuantity: 1 }, ...] }
+```
+
+Entries without the key are grouped under `null`, listed last. `credited` and `debited` include
+`setCreditBalance` resets. Dimensions stay local; they aren't sent to Stripe. Breakdowns read the
+tenant's rows in the range through the existing indexes; if you often group a large ledger by one
+key, add an expression index for it in your own migration, e.g.
+`create index on billing_credit_transactions (tenant_id, (dimensions->>'project'))`.
 
 ## Webhooks
 
