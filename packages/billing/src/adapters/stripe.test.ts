@@ -7,7 +7,7 @@ type Call = { params: Record<string, any>; opts?: Record<string, any> };
 
 /** Records the payloads the adapter sends; answers with just enough of Stripe's shapes. */
 function stubStripe(options: { currentItems?: Array<Record<string, any>>; prices?: Array<Record<string, any>> } = {}) {
-  const calls = { createSubscription: [] as Call[], updateSubscription: [] as Call[], checkout: [] as Call[], listPrices: [] as Call[] };
+  const calls = { createSubscription: [] as Call[], updateSubscription: [] as Call[], checkout: [] as Call[], listPrices: [] as Call[], preview: [] as Call[] };
   const subscription = (items: Array<Record<string, any>>) => ({ id: 'sub_1', customer: 'cus_1', status: 'active', items: { data: items }, metadata: {} });
   const client = {
     customers: { retrieve: async () => ({ id: 'cus_1', metadata: { tenantId: 't1' } }) },
@@ -20,6 +20,24 @@ function stubStripe(options: { currentItems?: Array<Record<string, any>>; prices
       update: async (_id: string, params: Record<string, any>, opts: Record<string, any>) => {
         calls.updateSubscription.push({ params, opts });
         return subscription(options.currentItems ?? []);
+      },
+    },
+    invoices: {
+      createPreview: async (params: Record<string, any>) => {
+        calls.preview.push({ params });
+        return {
+          currency: 'usd',
+          total: 9_900 + 5_000,
+          next_payment_attempt: 1_800_000_000,
+          period_end: 1_800_000_000,
+          lines: {
+            data: [
+              { description: 'Unused time on Starter', amount: -1_000, proration: true },
+              { description: 'Remaining time on Team', amount: 6_000, proration: true },
+              { description: 'Team', amount: 9_900, proration: false },
+            ],
+          },
+        };
       },
     },
     checkout: {
@@ -94,6 +112,35 @@ describe('StripeAdapter subscription items', () => {
     expect(calls.updateSubscription[0].params.items).toBeUndefined();
     await adapter.updateSubscription('sub_1', { priceId: 'price_team', quantity: 4 });
     expect(calls.updateSubscription[1].params.items).toEqual([{ id: 'si_seat', price: 'price_team', quantity: 4 }]);
+  });
+
+  it('previews a change with the same item set the update sends, and updates at the previewed time', async () => {
+    const { adapter, calls } = stubStripe({
+      currentItems: [
+        { id: 'si_base', price: { id: 'price_starter' }, quantity: 1 },
+        { id: 'si_over', price: { id: 'price_over_starter' } },
+      ],
+    });
+    const items = [{ priceId: 'price_team', quantity: 1 }, { priceId: 'price_over_team' }];
+    const at = new Date(1_790_000_000_000);
+    const preview = await adapter.previewSubscriptionChange('sub_1', { items, prorationBehavior: 'create_prorations', prorationDate: at });
+    expect(calls.preview[0].params).toStrictEqual({
+      customer: 'cus_1',
+      subscription: 'sub_1',
+      subscription_details: {
+        items: [{ id: 'si_base', deleted: true }, { id: 'si_over', deleted: true }, { price: 'price_team', quantity: 1 }, { price: 'price_over_team' }],
+        proration_behavior: 'create_prorations',
+        proration_date: 1_790_000_000,
+      },
+    });
+    expect(preview.prorationAmount).toBe(5_000);
+    expect(preview.invoiceTotal).toBe(14_900);
+    expect(preview.invoiceAt).toEqual(new Date(1_800_000_000_000));
+    expect(preview.prorationDate).toBe(at);
+
+    await adapter.updateSubscription('sub_1', { items, prorationBehavior: 'create_prorations', prorationDate: preview.prorationDate });
+    expect(calls.updateSubscription[0].params.proration_date).toBe(1_790_000_000);
+    expect(calls.updateSubscription[0].params.items).toStrictEqual(calls.preview[0].params.subscription_details.items);
   });
 
   it('builds checkout line items from items, quantity only when given', async () => {
