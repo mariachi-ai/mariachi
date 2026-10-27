@@ -313,6 +313,20 @@ describe('subscriptions with several prices', () => {
     await expect(billing.createCheckout(ctx, { mode: 'subscription', successUrl: 'u', cancelUrl: 'c' })).rejects.toMatchObject(invalid);
   });
 
+  it('previews a plan change without making it, prorated by the time left', async () => {
+    adapter.plans.push(plan({ id: 'price_small', amount: 500 }), plan({ id: 'price_big', amount: 2_000 }));
+    const sub = await billing.subscribe(ctx, { items: [{ priceId: 'price_small', quantity: 1 }] });
+    const half = new Date((sub.currentPeriodStart!.getTime() + sub.currentPeriodEnd!.getTime()) / 2);
+    const preview = await billing.previewPlanChange(ctx, sub.id, { items: [{ priceId: 'price_big', quantity: 1 }], prorationDate: half });
+    expect(preview.prorationAmount).toBe(750);
+    expect(preview.invoiceTotal).toBe(2_750);
+    expect(preview.invoiceAt).toEqual(sub.currentPeriodEnd);
+    expect(preview.prorationDate).toBe(half);
+    expect((await billing.getSubscription(ctx, sub.id)).planId).toBe('price_small');
+    const other = createContext({ logger: silent, tenantId: 't2' });
+    await expect(billing.previewPlanChange(other, sub.id, { items: [{ priceId: 'price_big' }] })).rejects.toThrow();
+  });
+
   it('creates a checkout for several prices', async () => {
     const items = [{ priceId: 'price_base', quantity: 1 }, { priceId: 'price_metered' }];
     const session = await billing.createCheckout(ctx, { mode: 'subscription', items, successUrl: 'u', cancelUrl: 'c', idempotencyKey: 'co1' });

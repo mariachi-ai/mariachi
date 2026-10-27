@@ -271,7 +271,29 @@ export interface UpdateSubscriptionInput {
    */
   items?: SubscriptionItemInput[];
   prorationBehavior?: 'create_prorations' | 'none' | 'always_invoice';
+  /**
+   * Prorate as though the change were made at this time (within the current period). Pass a
+   * preview's `prorationDate` so the change bills what was previewed.
+   */
+  prorationDate?: Date;
   metadata?: Record<string, string>;
+}
+
+/** What a subscription change would bill (`previewPlanChange`), without making it. */
+export interface SubscriptionChangePreview {
+  currency: string;
+  /**
+   * The proration lines' total, in minor units: charged (> 0) or credited (< 0) for the rest of
+   * the current period. On the invoice the change makes now (`always_invoice`), else on the next.
+   */
+  prorationAmount: number;
+  /** That invoice's total, in minor units: the prorations, plus the next period with `create_prorations`. */
+  invoiceTotal: number;
+  /** When that invoice is billed; null when now. */
+  invoiceAt: Date | null;
+  /** The time the prorations were computed for: pass it to `changePlan` as `prorationDate`. */
+  prorationDate: Date;
+  lines: Array<{ description: string | null; amount: number; proration: boolean }>;
 }
 
 export interface CreateChargeInput {
@@ -319,6 +341,8 @@ export interface BillingAdapter {
 
   createSubscription(input: CreateSubscriptionInput, opts?: IdempotencyOptions): Promise<Subscription>;
   updateSubscription(id: string, patch: UpdateSubscriptionInput, opts?: IdempotencyOptions): Promise<Subscription>;
+  /** What `updateSubscription(id, patch)` would bill, without making the change. */
+  previewSubscriptionChange(id: string, patch: UpdateSubscriptionInput): Promise<SubscriptionChangePreview>;
   cancelSubscription(id: string, options?: { atPeriodEnd?: boolean }): Promise<Subscription>;
   /** Pauses collection. The subscription stays in place and can be resumed. */
   pauseSubscription(id: string): Promise<Subscription>;

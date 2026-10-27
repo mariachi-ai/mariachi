@@ -18,6 +18,7 @@ import type {
   Refund,
   Subscription,
   SubscriptionItemInput,
+  SubscriptionChangePreview,
   UpdateSubscriptionInput,
 } from '../types';
 import { requestedItems } from '../types';
@@ -91,6 +92,16 @@ function replaceItems(
   }
   for (const next of pending.values()) changes.push(itemParam(next));
   return changes;
+}
+
+const toUnix = (d: Date) => Math.floor(d.getTime() / 1000);
+
+/** The item changes `patch` makes to `current`: the item set, or the first item's price and quantity. */
+function itemChanges(current: Stripe.Subscription, patch: UpdateSubscriptionInput): Stripe.SubscriptionUpdateParams.Item[] | undefined {
+  const item = current.items.data[0];
+  if (patch.items) return replaceItems(current.items.data, patch.items);
+  if (patch.priceId || patch.quantity !== undefined) return [{ id: item?.id, price: patch.priceId, quantity: patch.quantity }];
+  return undefined;
 }
 
 export class StripeAdapter implements BillingAdapter {
@@ -173,22 +184,45 @@ export class StripeAdapter implements BillingAdapter {
   async updateSubscription(id: string, patch: UpdateSubscriptionInput, opts: IdempotencyOptions = {}): Promise<Subscription> {
     return this.call('updateSubscription', async () => {
       const current = await this.stripe.subscriptions.retrieve(id);
-      const item = current.items.data[0];
-      const items = patch.items
-        ? replaceItems(current.items.data, patch.items)
-        : patch.priceId || patch.quantity !== undefined
-          ? [{ id: item?.id, price: patch.priceId, quantity: patch.quantity }]
-          : undefined;
+      const items = itemChanges(current, patch);
       const sub = await this.stripe.subscriptions.update(
         id,
         {
           items: items?.length ? items : undefined,
           proration_behavior: patch.prorationBehavior,
+          proration_date: patch.prorationDate && patch.prorationBehavior !== 'none' ? toUnix(patch.prorationDate) : undefined,
           metadata: patch.metadata,
         },
         { idempotencyKey: opts.idempotencyKey },
       );
       return mapSubscription(sub);
+    });
+  }
+
+  async previewSubscriptionChange(id: string, patch: UpdateSubscriptionInput): Promise<SubscriptionChangePreview> {
+    return this.call('previewSubscriptionChange', async () => {
+      const current = await this.stripe.subscriptions.retrieve(id);
+      const items = itemChanges(current, patch);
+      const behavior = patch.prorationBehavior ?? 'create_prorations';
+      const prorationDate = patch.prorationDate ?? new Date();
+      const invoice = await this.stripe.invoices.createPreview({
+        customer: idOf(current.customer) ?? undefined,
+        subscription: id,
+        subscription_details: {
+          items: items?.length ? (items as Stripe.InvoiceCreatePreviewParams.SubscriptionDetails.Item[]) : undefined,
+          proration_behavior: behavior,
+          proration_date: behavior === 'none' ? undefined : toUnix(prorationDate),
+        },
+      });
+      const lines = invoice.lines.data.map((l) => ({ description: l.description, amount: l.amount, proration: l.proration }));
+      return {
+        currency: invoice.currency,
+        prorationAmount: lines.filter((l) => l.proration).reduce((sum, l) => sum + l.amount, 0),
+        invoiceTotal: invoice.total,
+        invoiceAt: behavior === 'always_invoice' ? null : invoice.next_payment_attempt ? new Date(invoice.next_payment_attempt * 1000) : invoice.period_end ? new Date(invoice.period_end * 1000) : null,
+        prorationDate,
+        lines,
+      };
     });
   }
 

@@ -15,6 +15,7 @@ export type {
   Subscription,
   SubscriptionItem,
   SubscriptionItemInput,
+  SubscriptionChangePreview,
   SubscriptionStatus,
   Charge,
   Refund,

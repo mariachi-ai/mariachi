@@ -20,6 +20,7 @@ import {
   type SetCreditBalanceResult,
   type Subscription,
   type SubscriptionItemInput,
+  type SubscriptionChangePreview,
   type UpdateSubscriptionInput,
   type UsageBreakdown,
   type UsageSummary,
@@ -253,6 +254,16 @@ export abstract class Billing implements Instrumentable {
     const sub = await this.adapter.updateSubscription(subscriptionId, rest, { idempotencyKey: resolveKey(idempotencyKey, 'changePlan') });
     await this.store.upsertSubscription({ ...sub, tenantId: ctx.tenantId }, new Date());
     return sub;
+  }
+
+  /**
+   * What `changePlan(ctx, subscriptionId, patch)` would bill, without making the change: for a
+   * confirmation. Pass the result's `prorationDate` to `changePlan` so it bills what was shown.
+   */
+  async previewPlanChange(ctx: Context, subscriptionId: string, patch: UpdateSubscriptionInput): Promise<SubscriptionChangePreview> {
+    checkPrices(patch, false);
+    await this.getSubscription(ctx, subscriptionId);
+    return this.adapter.previewSubscriptionChange(subscriptionId, patch);
   }
 
   async cancelSubscription(ctx: Context, subscriptionId: string, options: { atPeriodEnd?: boolean; reason?: string } = {}): Promise<Subscription> {

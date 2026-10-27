@@ -19,6 +19,7 @@ import type {
   Subscription,
   SubscriptionItem,
   SubscriptionItemInput,
+  SubscriptionChangePreview,
   UpdateSubscriptionInput,
 } from '../types';
 import { requestedItems } from '../types';
@@ -144,6 +145,34 @@ export class MemoryBillingAdapter implements BillingAdapter {
     const next = this.withItems({ ...s, metadata: { ...s.metadata, ...patch.metadata } }, items);
     this.subscriptions.set(id, next);
     return next;
+  }
+
+  /**
+   * Prorates by time left in the period, from the plans' amounts (a metered price's is its unit
+   * amount, counted once): enough to test a confirmation, not Stripe's arithmetic.
+   */
+  async previewSubscriptionChange(id: string, patch: UpdateSubscriptionInput): Promise<SubscriptionChangePreview> {
+    const s = this.requireSubscription(id);
+    const next = patch.items ? this.toItems(patch.items, s.items) : s.items;
+    const amountOf = (items: SubscriptionItem[]) =>
+      items.reduce((sum, i) => sum + (this.plans.find((p) => p.id === i.priceId)?.amount ?? 0) * (i.quantity ?? 1), 0);
+    const prorationDate = patch.prorationDate ?? new Date();
+    const start = s.currentPeriodStart?.getTime() ?? prorationDate.getTime();
+    const end = s.currentPeriodEnd?.getTime() ?? prorationDate.getTime();
+    const left = end > start ? Math.max(0, Math.min(1, (end - prorationDate.getTime()) / (end - start))) : 0;
+    const behavior = patch.prorationBehavior ?? 'create_prorations';
+    const prorationAmount = behavior === 'none' ? 0 : Math.round((amountOf(next) - amountOf(s.items)) * left);
+    const lines = [{ description: 'Proration for the rest of the period', amount: prorationAmount, proration: true }];
+    if (behavior !== 'always_invoice') lines.push({ description: 'Next period', amount: amountOf(next), proration: false });
+    const currency = this.plans.find((p) => p.id === next[0]?.priceId)?.currency ?? 'usd';
+    return {
+      currency,
+      prorationAmount,
+      invoiceTotal: lines.reduce((sum, l) => sum + l.amount, 0),
+      invoiceAt: behavior === 'always_invoice' ? null : s.currentPeriodEnd,
+      prorationDate,
+      lines,
+    };
   }
 
   async cancelSubscription(id: string, options: { atPeriodEnd?: boolean } = {}): Promise<Subscription> {
