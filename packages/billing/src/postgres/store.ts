@@ -176,6 +176,24 @@ export class DrizzleBillingStore implements BillingStore {
     );
   }
 
+  async replaceCustomer(oldCustomerId: string, customer: Customer, occurredAt: Date): Promise<void> {
+    const ctx = { traceId: 'billing-customer' } as Context;
+    await withTransaction(this.database, ctx, async () =>
+      this.run('replaceCustomer', async () => {
+        // The ledger's locks for the old customer, so no write lands on it while its entries move.
+        const held = await this.db.selectDistinct({ tenantId: ledger.tenantId, currency: ledger.currency }).from(ledger).where(eq(ledger.customerId, oldCustomerId));
+        for (const h of held) await this.db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${h.tenantId}:${oldCustomerId}:${h.currency}`}, 0))`);
+        await this.db
+          .update(customers)
+          .set({ deletedAt: occurredAt, lastEventAt: occurredAt, updatedAt: new Date() })
+          .where(and(eq(customers.id, oldCustomerId), isNull(customers.deletedAt)));
+        await this.upsertCustomer(customer, occurredAt);
+        await this.db.update(ledger).set({ customerId: customer.id }).where(eq(ledger.customerId, oldCustomerId));
+        await this.db.update(usage).set({ customerId: customer.id }).where(eq(usage.customerId, oldCustomerId));
+      }),
+    );
+  }
+
   async findCustomer(customerId: string): Promise<Customer | null> {
     const rows = await this.run('findCustomer', () =>
       this.db.select().from(customers).where(and(eq(customers.id, customerId), isNull(customers.deletedAt))).limit(1),
