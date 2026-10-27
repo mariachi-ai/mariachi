@@ -66,6 +66,21 @@ describe('DrizzleBillingStore', () => {
     expect(await store.getCreditLedgerBalance('t1', 'cus_pg', 'usd')).toBe(10);
   });
 
+  it('replaces a customer, moving its ledger and usage', async () => {
+    const old = { id: 'cus_old', email: 'r@t', name: null, tenantId: 't_replace', delinquent: false, metadata: {} };
+    await store.upsertCustomer(old, new Date(1000));
+    await store.appendCreditTransaction({ tenantId: 't_replace', customerId: 'cus_old', currency: 'mcr', description: 'grant', amount: 500, idempotencyKey: 'g' });
+    await store.recordUsage({ tenantId: 't_replace', customerId: 'cus_old', metricName: 'm', quantity: 3, timestamp: new Date(), idempotencyKey: 'r1' });
+
+    await store.replaceCustomer('cus_old', { ...old, id: 'cus_new' }, new Date(2000));
+    expect((await store.findCustomerByTenant('t_replace'))?.id).toBe('cus_new');
+    expect(await store.findCustomer('cus_old')).toBeNull();
+    expect(await store.getCreditLedgerBalance('t_replace', 'cus_new', 'mcr')).toBe(500);
+    expect(await store.getCreditLedgerBalance('t_replace', 'cus_old', 'mcr')).toBe(0);
+    const spent = await store.appendCreditTransaction({ tenantId: 't_replace', customerId: 'cus_new', currency: 'mcr', description: 'use', amount: -200 });
+    expect(spent?.balanceAfter).toBe(300);
+  });
+
   it('deduplicates usage by idempotency key', async () => {
     const rec = { tenantId: 't1', customerId: 'cus_pg', metricName: 'tokens', quantity: 5, timestamp: new Date(), idempotencyKey: 'u1' };
     expect(await store.recordUsage(rec)).toBe(true);

@@ -170,6 +170,24 @@ describe('Billing service', () => {
     expect(a.tenantId).toBe('t1');
   });
 
+  it('replaces, when asked to verify, a stored customer the provider no longer has, keeping its credits', async () => {
+    const adapter = new MemoryBillingAdapter();
+    const store = new MemoryBillingStore();
+    billing = new DefaultBilling({ adapter, store }, deps);
+    await store.upsertCustomer({ id: 'cus_gone', email: 'a@t1', name: null, tenantId: 't1', delinquent: false, metadata: {} }, new Date(0));
+    await billing.grantCredits(t1, 100, { description: 'grant', idempotencyKey: 'grant' });
+    await billing.reportUsage(t1, { metricName: 'm', quantity: 2, idempotencyKey: 'u1' });
+
+    expect((await billing.ensureCustomer(t1, { email: 'a@t1' })).id).toBe('cus_gone');
+    const replaced = await billing.ensureCustomer(t1, { email: 'a@t1' }, { verify: true });
+    expect(replaced.id).not.toBe('cus_gone');
+    expect(await adapter.getCustomer(replaced.id)).not.toBeNull();
+    expect((await billing.getCustomer(t1))?.id).toBe(replaced.id);
+    expect(await billing.getCreditBalance(t1)).toBe(100);
+    expect(store.usage.every((u) => u.customerId === replaced.id)).toBe(true);
+    expect((await billing.ensureCustomer(t1, { email: 'a@t1' }, { verify: true })).id).toBe(replaced.id);
+  });
+
   it('isolates subscriptions between tenants', async () => {
     await billing.ensureCustomer(t1, { email: 'a@t1' });
     await billing.ensureCustomer(t2, { email: 'b@t2' });

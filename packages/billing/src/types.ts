@@ -397,6 +397,12 @@ export interface BillingStore {
   markCustomerDeleted(customerId: string, occurredAt: Date): Promise<void>;
   findCustomer(customerId: string): Promise<Customer | null>;
   findCustomerByTenant(tenantId: string): Promise<Customer | null>;
+  /**
+   * Puts `customer` in place of the tenant's `oldCustomerId`, which the provider no longer has:
+   * the old one is marked deleted and its credit ledger and usage records move to the new id, so
+   * the tenant's balance and usage carry over. Atomic.
+   */
+  replaceCustomer(oldCustomerId: string, customer: Customer, occurredAt: Date): Promise<void>;
 
   upsertSubscription(subscription: Subscription, occurredAt: Date): Promise<{ applied: boolean; previousStatus: SubscriptionStatus | null }>;
   findSubscription(id: string): Promise<Subscription | null>;

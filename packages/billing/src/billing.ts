@@ -126,19 +126,40 @@ export abstract class Billing implements Instrumentable {
 
   // ── Customers ──────────────────────────────────────────────────────────────
 
-  /** Returns the tenant's customer, creating it on first use. Safe to call concurrently. */
-  async ensureCustomer(ctx: Context, input: { email: string; name?: string; metadata?: Record<string, string> }): Promise<Customer> {
+  /**
+   * Returns the tenant's customer, creating it on first use. Safe to call concurrently.
+   *
+   * With `verify`, the stored customer is first looked up with the provider (one call), and one
+   * the provider doesn't have is replaced by a new one, its credit ledger and usage moving with it
+   * (`BillingStore.replaceCustomer`). That happens when the customer was deleted at the provider,
+   * or was made by another adapter (the memory adapter's, before a provider was configured). Pass
+   * it before calls that send the customer's id to the provider: checkout, the portal, invoices.
+   */
+  async ensureCustomer(
+    ctx: Context,
+    input: { email: string; name?: string; metadata?: Record<string, string> },
+    options: { verify?: boolean } = {},
+  ): Promise<Customer> {
     const tenantId = requireTenant(ctx);
     return withSpan(this.tracer, 'billing.ensureCustomer', { tenantId }, async () => {
       const existing = await this.store.findCustomerByTenant(tenantId);
-      if (existing) return existing;
+      if (existing && (!options.verify || (await this.adapter.getCustomer(existing.id)))) return existing;
       const customer = await this.adapter.createCustomer(
         { ...input, tenantId },
-        { idempotencyKey: `mariachi:customer:${tenantId}` },
+        { idempotencyKey: existing ? `mariachi:customer:${tenantId}:replaces:${existing.id}` : `mariachi:customer:${tenantId}` },
       );
-      await this.store.upsertCustomer(customer, new Date());
-      this.metrics?.increment('billing.customer.created', 1);
-      this.logger.info({ traceId: ctx.traceId, tenantId, customerId: customer.id }, 'Billing customer created');
+      if (existing) {
+        await this.store.replaceCustomer(existing.id, customer, new Date());
+        this.metrics?.increment('billing.customer.replaced', 1);
+        this.logger.warn(
+          { traceId: ctx.traceId, tenantId, customerId: customer.id, replaced: existing.id },
+          'Billing customer replaced: the provider has no customer with the stored id',
+        );
+      } else {
+        await this.store.upsertCustomer(customer, new Date());
+        this.metrics?.increment('billing.customer.created', 1);
+        this.logger.info({ traceId: ctx.traceId, tenantId, customerId: customer.id }, 'Billing customer created');
+      }
       await this.onCustomerCreated?.(ctx, customer);
       return customer;
     });

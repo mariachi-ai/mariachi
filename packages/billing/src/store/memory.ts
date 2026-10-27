@@ -71,6 +71,13 @@ export class MemoryBillingStore implements BillingStore {
     if (cur) this.customers.set(customerId, { ...cur, deleted: true, at: Math.max(cur.at, occurredAt.getTime()) });
   }
 
+  async replaceCustomer(oldCustomerId: string, customer: Customer, occurredAt: Date): Promise<void> {
+    await this.markCustomerDeleted(oldCustomerId, occurredAt);
+    await this.upsertCustomer(customer, occurredAt);
+    for (const t of this.ledger) if (t.customerId === oldCustomerId) t.customerId = customer.id;
+    for (const u of this.usage) if (u.customerId === oldCustomerId) u.customerId = customer.id;
+  }
+
   async findCustomer(customerId: string): Promise<Customer | null> {
     const c = this.customers.get(customerId);
     return c && !c.deleted ? c.value : null;
