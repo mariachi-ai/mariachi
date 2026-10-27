@@ -93,6 +93,14 @@ describe('errors', () => {
   it('maps codes to HTTP statuses, most specific first', () => {
     expect(errorToHttpStatus(new AuthError('auth/forbidden', 'x'))).toBe(403);
     expect(errorToHttpStatus(new AuthError('auth/something-else', 'x'))).toBe(401);
+    // An app's own code the table doesn't know: the status the error declares, else 500.
+    class NotConfigured extends MariachiError {
+      readonly statusCode = 503;
+    }
+    expect(errorToHttpStatus(new NotConfigured('webhooks/not-configured', 'x', {}))).toBe(503);
+    expect(errorToHttpStatus(new MariachiError('app/whatever', 'x', {}))).toBe(500);
+    expect(errorToHttpStatus(Object.assign(new MariachiError('app/odd', 'x', {}), { statusCode: 200 }))).toBe(500);
+    expect(errorToHttpStatus(Object.assign(new AuthError('auth/forbidden', 'x'), { statusCode: 503 }))).toBe(403);
     expect(errorToHttpStatus(new MariachiError('billing/customer/not-found', 'x'))).toBe(404);
     expect(errorToHttpStatus(new NotFoundError('User', '1'))).toBe(404);
     expect(errorToHttpStatus(new MariachiError('database/query-failed', 'x'))).toBe(500);
