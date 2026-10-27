@@ -268,6 +268,10 @@ export function errorToHttpStatus(error: MariachiError): number {
   for (const prefix of SORTED_CODES) {
     if (code.startsWith(`${prefix}/`)) return ERROR_CODE_TO_HTTP[prefix];
   }
+  // An app's own code the table doesn't know: the status the error declares (e.g. a 503 for a
+  // feature that isn't configured), else 500.
+  const own = (error as { statusCode?: unknown }).statusCode;
+  if (typeof own === 'number' && Number.isInteger(own) && own >= 400 && own <= 599) return own;
   return 500;
 }
 
