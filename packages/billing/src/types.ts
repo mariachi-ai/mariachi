@@ -33,13 +33,23 @@ export type SubscriptionStatus =
   | 'incomplete_expired'
   | 'paused';
 
+export interface SubscriptionItem {
+  /** Provider item id, e.g. `si_...`. */
+  id: string;
+  priceId: string;
+  /** Null for a metered (usage-based) price, which has no quantity. */
+  quantity: number | null;
+}
+
 export interface Subscription {
   id: string;
   customerId: string;
   tenantId: string | null;
-  /** Price id of the first item. */
+  /** Price id of the first item. A subscription with several prices lists them all in `items`. */
   planId: string;
+  /** Quantity of the first item. */
   quantity: number;
+  items: SubscriptionItem[];
   status: SubscriptionStatus;
   currentPeriodStart: Date | null;
   currentPeriodEnd: Date | null;
@@ -52,6 +62,12 @@ export interface Subscription {
 
 /** Subscriptions in these states grant access to paid features. */
 export const ENTITLED_STATUSES: ReadonlySet<SubscriptionStatus> = new Set(['active', 'trialing', 'past_due']);
+
+/** The prices a subscription or checkout input asks for: `items`, or the single `priceId`. */
+export function requestedItems(input: { priceId?: string; quantity?: number; items?: SubscriptionItemInput[] }): SubscriptionItemInput[] {
+  if (input.items) return input.items;
+  return input.priceId ? [{ priceId: input.priceId, quantity: input.quantity }] : [];
+}
 
 export interface Charge {
   /** Payment intent id (`pi_...`). */
@@ -124,7 +140,12 @@ export interface Plan {
   currency: string;
   interval: 'day' | 'week' | 'month' | 'year' | null;
   active: boolean;
+  /** Stable name for the price (Stripe `lookup_key`), so code can refer to a plan without its id. */
+  lookupKey: string | null;
+  /** The price's own metadata. */
   metadata: Record<string, string>;
+  /** Metadata of the price's product, when the provider returned the product. */
+  productMetadata: Record<string, string>;
 }
 
 export interface CheckoutSession {
@@ -136,6 +157,9 @@ export interface PortalSession {
   url: string;
 }
 
+/** Caller-defined attribution labels (at most 16 keys; keys and values up to 128 characters). */
+export type Dimensions = Record<string, string>;
+
 export interface UsageRecord {
   customerId: string;
   tenantId: string;
@@ -143,6 +167,7 @@ export interface UsageRecord {
   quantity: number;
   timestamp: Date;
   idempotencyKey?: string;
+  dimensions?: Dimensions | null;
 }
 
 export interface UsageSummary {
@@ -150,6 +175,16 @@ export interface UsageSummary {
   totalQuantity: number;
   periodStart: Date;
   periodEnd: Date;
+}
+
+/** Usage of one metric split by the value of one dimension key. */
+export interface UsageBreakdown {
+  metricName: string;
+  groupBy: string;
+  periodStart: Date;
+  periodEnd: Date;
+  /** Ordered by value; records without the key are grouped under `null`, last. */
+  groups: Array<{ value: string | null; totalQuantity: number }>;
 }
 
 export interface DateRange {
@@ -161,14 +196,40 @@ export interface CreditTransaction {
   id: string;
   tenantId: string;
   customerId: string;
+  /** Integer in the ledger's unit. Positive grants, negative consumes. */
   amount: number;
+  /** Any 3-letter unit code: an ISO currency (`usd`) or a unit of your own (`mcr`). */
   currency: string;
   balanceAfter: number;
   description: string;
   referenceType?: string | null;
   referenceId?: string | null;
   idempotencyKey?: string | null;
+  dimensions?: Dimensions | null;
   createdAt: Date;
+}
+
+/** What `setCreditBalance` did. */
+export interface SetCreditBalanceResult {
+  /** False when the balance already was the target. */
+  changed: boolean;
+  /** The balance the entry left: the target, or the original entry's on an idempotent replay. */
+  balance: number;
+  /**
+   * The entry recorded. Null when nothing changed and no idempotency key was given; with a
+   * key, an unchanged balance still records a zero-amount entry so the key is claimed.
+   */
+  transaction: CreditTransaction | null;
+}
+
+/** Ledger entries in one unit split by the value of one dimension key. */
+export interface CreditSummary {
+  currency: string;
+  groupBy: string;
+  periodStart: Date;
+  periodEnd: Date;
+  /** Ordered by value; entries without the key are grouped under `null`, last. `debited` is positive. */
+  groups: Array<{ value: string | null; credited: number; debited: number }>;
 }
 
 // ── Provider port ─────────────────────────────────────────────────────────────
@@ -184,17 +245,31 @@ export interface CreateCustomerInput {
   metadata?: Record<string, string>;
 }
 
-export interface CreateSubscriptionInput {
-  customerId: string;
+/** One price on a subscription or checkout. Omit `quantity` for a metered price. */
+export interface SubscriptionItemInput {
   priceId: string;
   quantity?: number;
+}
+
+/** Give either `priceId` (with an optional `quantity`) or `items`. */
+export interface CreateSubscriptionInput {
+  customerId: string;
+  priceId?: string;
+  quantity?: number;
+  items?: SubscriptionItemInput[];
   trialDays?: number;
   metadata?: Record<string, string>;
 }
 
 export interface UpdateSubscriptionInput {
+  /** Replaces the first item's price. */
   priceId?: string;
   quantity?: number;
+  /**
+   * Replaces the item set: items whose price is listed are kept (and get the new quantity when
+   * one is given), the others are removed, new prices are added.
+   */
+  items?: SubscriptionItemInput[];
   prorationBehavior?: 'create_prorations' | 'none' | 'always_invoice';
   metadata?: Record<string, string>;
 }
@@ -208,9 +283,11 @@ export interface CreateChargeInput {
   metadata?: Record<string, string>;
 }
 
+/** Give either `priceId` (quantity defaults to 1) or `items` (quantity sent only when given). */
 export interface CreateCheckoutInput {
   customerId: string;
-  priceId: string;
+  priceId?: string;
+  items?: SubscriptionItemInput[];
   mode: 'subscription' | 'payment';
   successUrl: string;
   cancelUrl: string;
@@ -255,7 +332,8 @@ export interface BillingAdapter {
   createCheckoutSession(input: CreateCheckoutInput, opts?: IdempotencyOptions): Promise<CheckoutSession>;
   createPortalSession(customerId: string, returnUrl: string): Promise<PortalSession>;
   listInvoices(customerId: string, options?: { limit?: number }): Promise<Invoice[]>;
-  listPlans(options?: { activeOnly?: boolean }): Promise<Plan[]>;
+  /** `lookupKeys` limits the list to prices with those lookup keys. */
+  listPlans(options?: { activeOnly?: boolean; lookupKeys?: string[] }): Promise<Plan[]>;
 
   reportUsage(input: { customerId: string; metricName: string; quantity: number; timestamp: Date; idempotencyKey?: string }): Promise<void>;
 
@@ -331,7 +409,8 @@ export interface BillingStore {
 
   /** Mirrors a provider price. Older events than the stored one are ignored. */
   upsertPlan(plan: Plan, occurredAt: Date): Promise<void>;
-  listPlans(options?: { activeOnly?: boolean }): Promise<Plan[]>;
+  findPlan(id: string): Promise<Plan | null>;
+  listPlans(options?: { activeOnly?: boolean; lookupKeys?: string[] }): Promise<Plan[]>;
 
   recordWebhookEvent(event: { id: string; type: string; status: WebhookEventStatus; error?: string; payload?: unknown }): Promise<void>;
   getWebhookEvent(id: string): Promise<StoredWebhookEvent | null>;
@@ -340,6 +419,8 @@ export interface BillingStore {
   /** Records usage once per idempotency key. Returns false for a duplicate. */
   recordUsage(record: UsageRecord): Promise<boolean>;
   summarizeUsage(tenantId: string, metricName: string, range: DateRange): Promise<UsageSummary>;
+  /** Sums usage per value of `dimensions[groupBy]` (`null` for records without it). */
+  summarizeUsageByDimension(tenantId: string, metricName: string, range: DateRange, groupBy: string): Promise<UsageBreakdown['groups']>;
 
   /**
    * Appends a ledger entry atomically. Rejects with `billing/insufficient-credits`
@@ -350,7 +431,25 @@ export interface BillingStore {
     entry: Omit<CreditTransaction, 'id' | 'balanceAfter' | 'createdAt'>,
     options?: { allowNegative?: boolean },
   ): Promise<CreditTransaction>;
+  /**
+   * Appends the entry that brings the balance to exactly `targetBalance`, computed under the
+   * same lock as `appendCreditTransaction`. When the balance already is the target, records a
+   * zero-amount entry if `idempotencyKey` is set (claiming the key) and nothing otherwise
+   * (returns null). Returns the existing entry when `idempotencyKey` was already used.
+   */
+  setCreditLedgerBalance(
+    entry: Omit<CreditTransaction, 'id' | 'amount' | 'balanceAfter' | 'createdAt'>,
+    targetBalance: number,
+  ): Promise<CreditTransaction | null>;
   getCreditLedgerBalance(tenantId: string, customerId: string, currency: string): Promise<number>;
+  /** Sums credits and debits per value of `dimensions[groupBy]` (`null` for entries without it). */
+  summarizeCreditsByDimension(
+    tenantId: string,
+    customerId: string,
+    currency: string,
+    range: DateRange,
+    groupBy: string,
+  ): Promise<CreditSummary['groups']>;
   listCreditTransactions(tenantId: string, customerId: string, options?: { limit?: number }): Promise<CreditTransaction[]>;
 }
 

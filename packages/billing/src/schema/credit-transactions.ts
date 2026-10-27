@@ -14,6 +14,7 @@ export const billingCreditTransactionsTable = defineTable(
     referenceType:  column.text(),
     referenceId:    column.text(),
     idempotencyKey: column.text(),
+    dimensions:     column.json().$type<Record<string, string>>(),
     createdAt:      column.timestamp().notNull().defaultNow(),
   },
   {

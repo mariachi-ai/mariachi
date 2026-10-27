@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { BillingError, type Context } from '@mariachi/core';
 import { compileTable, currentTransaction, mapPgError, withTransaction, type DrizzleDb } from '@mariachi/database-postgres';
 import {
@@ -16,6 +16,7 @@ import {
 import type {
   BillingStore,
   Charge,
+  CreditSummary,
   CreditTransaction,
   Customer,
   DateRange,
@@ -25,6 +26,7 @@ import type {
   Refund,
   Subscription,
   SubscriptionStatus,
+  UsageBreakdown,
   UsageRecord,
   UsageSummary,
   StoredWebhookEvent,
@@ -47,6 +49,8 @@ export const billingTables = { customers, subscriptions, charges, refunds, invoi
 
 type Row = Record<string, any>;
 
+type LedgerEntry = Omit<CreditTransaction, 'id' | 'amount' | 'balanceAfter' | 'createdAt'>;
+
 function toCustomer(r: Row): Customer {
   return {
     id: r.id,
@@ -65,6 +69,8 @@ function toSubscription(r: Row): Subscription {
     tenantId: r.tenantId,
     planId: r.planId,
     quantity: r.quantity,
+    // Rows written before the column existed read as no items until the next sync.
+    items: r.items ?? [],
     status: r.status,
     currentPeriodStart: r.currentPeriodStart,
     currentPeriodEnd: r.currentPeriodEnd,
@@ -73,6 +79,22 @@ function toSubscription(r: Row): Subscription {
     canceledAt: r.canceledAt,
     trialEnd: r.trialEnd,
     metadata: r.metadata ?? {},
+  };
+}
+
+function toPlan(r: Row): Plan {
+  return {
+    id: r.id,
+    productId: r.productId,
+    name: r.name,
+    description: r.description ?? null,
+    amount: Number(r.amount),
+    currency: r.currency,
+    interval: (r.interval as Plan['interval']) ?? null,
+    active: r.active,
+    lookupKey: r.lookupKey ?? null,
+    metadata: (r.metadata as Record<string, string> | null) ?? {},
+    productMetadata: (r.productMetadata as Record<string, string> | null) ?? {},
   };
 }
 
@@ -99,6 +121,7 @@ function toTransaction(r: Row): CreditTransaction {
     referenceType: r.referenceType,
     referenceId: r.referenceId,
     idempotencyKey: r.idempotencyKey,
+    dimensions: r.dimensions ?? null,
     createdAt: r.createdAt,
   };
 }
@@ -270,7 +293,9 @@ export class DrizzleBillingStore implements BillingStore {
       currency: plan.currency,
       interval: plan.interval,
       active: plan.active,
+      lookupKey: plan.lookupKey,
       metadata: plan.metadata,
+      productMetadata: plan.productMetadata,
       lastEventAt: occurredAt,
     };
     await this.run('upsertPlan', () =>
@@ -285,25 +310,26 @@ export class DrizzleBillingStore implements BillingStore {
     );
   }
 
-  async listPlans(options: { activeOnly?: boolean } = {}): Promise<Plan[]> {
+  async findPlan(id: string): Promise<Plan | null> {
+    const rows = await this.run('findPlan', () => this.db.select().from(plans).where(eq(plans.id, id)).limit(1));
+    return rows[0] ? toPlan(rows[0]) : null;
+  }
+
+  async listPlans(options: { activeOnly?: boolean; lookupKeys?: string[] } = {}): Promise<Plan[]> {
+    if (options.lookupKeys?.length === 0) return [];
     const rows = await this.run('listPlans', () =>
       this.db
         .select()
         .from(plans)
-        .where((options.activeOnly ?? true) ? eq(plans.active, true) : undefined)
+        .where(
+          and(
+            (options.activeOnly ?? true) ? eq(plans.active, true) : undefined,
+            options.lookupKeys ? inArray(plans.lookupKey, options.lookupKeys) : undefined,
+          ),
+        )
         .orderBy(asc(plans.amount)),
     );
-    return rows.map((r) => ({
-      id: r.id,
-      productId: r.productId,
-      name: r.name,
-      description: r.description ?? null,
-      amount: Number(r.amount),
-      currency: r.currency,
-      interval: (r.interval as Plan['interval']) ?? null,
-      active: r.active,
-      metadata: (r.metadata as Record<string, string> | null) ?? {},
-    }));
+    return rows.map(toPlan);
   }
 
   async recordWebhookEvent(event: { id: string; type: string; status: WebhookEventStatus; error?: string; payload?: unknown }): Promise<void> {
@@ -365,13 +391,31 @@ export class DrizzleBillingStore implements BillingStore {
     return { metricName, totalQuantity: Number(rows[0]?.total ?? 0), periodStart: range.from, periodEnd: range.to };
   }
 
-  async appendCreditTransaction(
-    entry: Omit<CreditTransaction, 'id' | 'balanceAfter' | 'createdAt'>,
-    options: { allowNegative?: boolean } = {},
-  ): Promise<CreditTransaction> {
+  async summarizeUsageByDimension(tenantId: string, metricName: string, range: DateRange, groupBy: string): Promise<UsageBreakdown['groups']> {
+    const rows = await this.run('summarizeUsageByDimension', () =>
+      this.db
+        .select({ value: sql<string | null>`${usage.dimensions}->>${groupBy}`, total: sql<string>`coalesce(sum(${usage.quantity}), 0)` })
+        .from(usage)
+        .where(and(eq(usage.tenantId, tenantId), eq(usage.metricName, metricName), gte(usage.timestamp, range.from), lt(usage.timestamp, range.to)))
+        // By position: the key is a bind parameter, so repeating the expression wouldn't match.
+        .groupBy(sql`1`)
+        .orderBy(sql`1 asc nulls last`),
+    );
+    return rows.map((r) => ({ value: r.value ?? null, totalQuantity: Number(r.total) }));
+  }
+
+  /**
+   * Runs `write` in a transaction holding the per-(tenant, customer, currency) advisory lock,
+   * with the current balance. Returns the existing entry instead when the idempotency key was used.
+   */
+  private async withLedgerLock<T extends CreditTransaction | null>(
+    operation: string,
+    entry: LedgerEntry,
+    write: (current: number) => Promise<T>,
+  ): Promise<CreditTransaction | T> {
     const ctx = { traceId: 'billing-ledger' } as Context;
     return withTransaction(this.database, ctx, async () =>
-      this.run('appendCreditTransaction', async () => {
+      this.run(operation, async () => {
         const lockKey = `${entry.tenantId}:${entry.customerId}:${entry.currency}`;
         await this.db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
 
@@ -384,18 +428,39 @@ export class DrizzleBillingStore implements BillingStore {
           if (existing[0]) return toTransaction(existing[0]);
         }
 
-        const current = await this.getCreditLedgerBalance(entry.tenantId, entry.customerId, entry.currency);
-        const balanceAfter = current + entry.amount;
-        if (balanceAfter < 0 && !options.allowNegative) {
-          throw new BillingError('billing/insufficient-credits', 'Insufficient credits', { balance: current, requested: -entry.amount });
-        }
-        const [row] = await this.db
-          .insert(ledger)
-          .values({ ...entry, balanceAfter, createdAt: sql`clock_timestamp()` })
-          .returning();
-        return toTransaction(row);
+        return write(await this.getCreditLedgerBalance(entry.tenantId, entry.customerId, entry.currency));
       }),
     );
+  }
+
+  private async insertEntry(entry: LedgerEntry, amount: number, balanceAfter: number): Promise<CreditTransaction> {
+    const [row] = await this.db
+      .insert(ledger)
+      .values({ ...entry, amount, balanceAfter, createdAt: sql`clock_timestamp()` })
+      .returning();
+    return toTransaction(row);
+  }
+
+  async appendCreditTransaction(
+    entry: Omit<CreditTransaction, 'id' | 'balanceAfter' | 'createdAt'>,
+    options: { allowNegative?: boolean } = {},
+  ): Promise<CreditTransaction> {
+    const { amount, ...rest } = entry;
+    return this.withLedgerLock('appendCreditTransaction', rest, async (current) => {
+      const balanceAfter = current + amount;
+      if (balanceAfter < 0 && !options.allowNegative) {
+        throw new BillingError('billing/insufficient-credits', 'Insufficient credits', { balance: current, requested: -amount });
+      }
+      return this.insertEntry(rest, amount, balanceAfter);
+    });
+  }
+
+  async setCreditLedgerBalance(entry: LedgerEntry, targetBalance: number): Promise<CreditTransaction | null> {
+    return this.withLedgerLock('setCreditLedgerBalance', entry, async (current) => {
+      const amount = targetBalance - current;
+      if (amount === 0 && !entry.idempotencyKey) return null;
+      return this.insertEntry(entry, amount, targetBalance);
+    });
   }
 
   async getCreditLedgerBalance(tenantId: string, customerId: string, currency: string): Promise<number> {
@@ -408,6 +473,37 @@ export class DrizzleBillingStore implements BillingStore {
         .limit(1),
     );
     return Number(rows[0]?.balanceAfter ?? 0);
+  }
+
+  async summarizeCreditsByDimension(
+    tenantId: string,
+    customerId: string,
+    currency: string,
+    range: DateRange,
+    groupBy: string,
+  ): Promise<CreditSummary['groups']> {
+    const rows = await this.run('summarizeCreditsByDimension', () =>
+      this.db
+        .select({
+          value: sql<string | null>`${ledger.dimensions}->>${groupBy}`,
+          credited: sql<string>`coalesce(sum(${ledger.amount}) filter (where ${ledger.amount} > 0), 0)`,
+          debited: sql<string>`coalesce(-sum(${ledger.amount}) filter (where ${ledger.amount} < 0), 0)`,
+        })
+        .from(ledger)
+        .where(
+          and(
+            eq(ledger.tenantId, tenantId),
+            eq(ledger.customerId, customerId),
+            eq(ledger.currency, currency),
+            gte(ledger.createdAt, range.from),
+            lt(ledger.createdAt, range.to),
+          ),
+        )
+        // By position: the key is a bind parameter, so repeating the expression wouldn't match.
+        .groupBy(sql`1`)
+        .orderBy(sql`1 asc nulls last`),
+    );
+    return rows.map((r) => ({ value: r.value ?? null, credited: Number(r.credited), debited: Number(r.debited) }));
   }
 
   async listCreditTransactions(tenantId: string, customerId: string, options: { limit?: number } = {}): Promise<CreditTransaction[]> {

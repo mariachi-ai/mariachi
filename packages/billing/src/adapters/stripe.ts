@@ -17,9 +17,11 @@ import type {
   ProviderEvent,
   Refund,
   Subscription,
+  SubscriptionItemInput,
   UpdateSubscriptionInput,
 } from '../types';
-import { mapCustomer, mapInvoice, mapPaymentIntent, mapPrice, mapRefund, mapSubscription } from './stripe-mappers';
+import { requestedItems } from '../types';
+import { idOf, mapCustomer, mapInvoice, mapPaymentIntent, mapPrice, mapRefund, mapSubscription } from './stripe-mappers';
 
 export interface StripeAdapterConfig {
   secretKey: string;
@@ -31,6 +33,14 @@ export interface StripeAdapterConfig {
   /** Pre-built client (tests). */
   client?: Stripe;
 }
+
+/** Stripe rejects a quantity on a metered price, so it is only sent when the caller gave one. */
+function itemParam(item: SubscriptionItemInput): { price: string; quantity?: number } {
+  return item.quantity === undefined ? { price: item.priceId } : { price: item.priceId, quantity: item.quantity };
+}
+
+/** Stripe accepts at most 10 lookup keys per price list request. */
+const LOOKUP_KEYS_PER_REQUEST = 10;
 
 function isMissing(err: unknown): boolean {
   return err instanceof Stripe.errors.StripeError && (err.code === 'resource_missing' || err.statusCode === 404);
@@ -60,6 +70,27 @@ export function mapStripeError(err: unknown, operation: string): BillingError {
     default:
       return new BillingError('billing/upstream-failed', err.message, meta);
   }
+}
+
+/** The update that turns the current items into `wanted`, matching items by price. */
+function replaceItems(
+  current: Stripe.SubscriptionItem[],
+  wanted: SubscriptionItemInput[],
+): Stripe.SubscriptionUpdateParams.Item[] {
+  const pending = new Map(wanted.map((w) => [w.priceId, w]));
+  const changes: Stripe.SubscriptionUpdateParams.Item[] = [];
+  for (const item of current) {
+    const priceId = idOf(item.price);
+    const next = priceId ? pending.get(priceId) : undefined;
+    if (!next) {
+      changes.push({ id: item.id, deleted: true });
+      continue;
+    }
+    pending.delete(next.priceId);
+    if (next.quantity !== undefined) changes.push({ id: item.id, quantity: next.quantity });
+  }
+  for (const next of pending.values()) changes.push(itemParam(next));
+  return changes;
 }
 
 export class StripeAdapter implements BillingAdapter {
@@ -127,7 +158,7 @@ export class StripeAdapter implements BillingAdapter {
       const sub = await this.stripe.subscriptions.create(
         {
           customer: input.customerId,
-          items: [{ price: input.priceId, quantity: input.quantity }],
+          items: requestedItems(input).map(itemParam),
           trial_period_days: input.trialDays,
           metadata: { ...input.metadata, ...(tenantId ? { tenantId } : {}) },
           payment_behavior: 'default_incomplete',
@@ -143,13 +174,15 @@ export class StripeAdapter implements BillingAdapter {
     return this.call('updateSubscription', async () => {
       const current = await this.stripe.subscriptions.retrieve(id);
       const item = current.items.data[0];
+      const items = patch.items
+        ? replaceItems(current.items.data, patch.items)
+        : patch.priceId || patch.quantity !== undefined
+          ? [{ id: item?.id, price: patch.priceId, quantity: patch.quantity }]
+          : undefined;
       const sub = await this.stripe.subscriptions.update(
         id,
         {
-          items:
-            patch.priceId || patch.quantity !== undefined
-              ? [{ id: item?.id, price: patch.priceId, quantity: patch.quantity }]
-              : undefined,
+          items: items?.length ? items : undefined,
           proration_behavior: patch.prorationBehavior,
           metadata: patch.metadata,
         },
@@ -250,7 +283,7 @@ export class StripeAdapter implements BillingAdapter {
         {
           customer: input.customerId,
           mode: input.mode,
-          line_items: [{ price: input.priceId, quantity: input.quantity ?? 1 }],
+          line_items: input.items ? input.items.map(itemParam) : [{ price: input.priceId, quantity: input.quantity ?? 1 }],
           success_url: input.successUrl,
           cancel_url: input.cancelUrl,
           allow_promotion_codes: input.allowPromotionCodes,
@@ -279,11 +312,19 @@ export class StripeAdapter implements BillingAdapter {
     });
   }
 
-  async listPlans(options: { activeOnly?: boolean } = {}): Promise<Plan[]> {
+  async listPlans(options: { activeOnly?: boolean; lookupKeys?: string[] } = {}): Promise<Plan[]> {
     return this.call('listPlans', async () => {
+      // `active: false` would list only inactive prices, so "all" omits the filter.
+      const base = { active: options.activeOnly === false ? undefined : true, limit: 100, expand: ['data.product'] };
+      const keys = options.lookupKeys;
+      const requests: Stripe.PriceListParams[] = [];
+      if (!keys) requests.push(base);
+      for (let i = 0; keys && i < keys.length; i += LOOKUP_KEYS_PER_REQUEST) {
+        requests.push({ ...base, lookup_keys: keys.slice(i, i + LOOKUP_KEYS_PER_REQUEST) });
+      }
       const out: Plan[] = [];
-      for await (const p of this.stripe.prices.list({ active: options.activeOnly ?? true, limit: 100, expand: ['data.product'] })) {
-        out.push(mapPrice(p));
+      for (const params of requests) {
+        for await (const p of this.stripe.prices.list(params)) out.push(mapPrice(p));
       }
       return out;
     });

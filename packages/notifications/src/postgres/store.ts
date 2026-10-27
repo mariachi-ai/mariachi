@@ -16,6 +16,9 @@ const notifications = compileTable(notificationsTable);
 const preferences = compileTable(notificationPreferencesTable);
 const deliveries = compileTable(notificationDeliveriesTable);
 
+/** Compiled Drizzle tables, for drizzle-kit schema files and custom queries (as `billingTables`). */
+export const notificationTables = { notifications, preferences, deliveries };
+
 const DEFAULT_CHANNELS: NotificationChannel[] = ['email', 'in_app'];
 
 /**

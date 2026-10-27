@@ -1,5 +1,5 @@
 import type Stripe from 'stripe';
-import type { Charge, Customer, Dispute, Invoice, Plan, Refund, Subscription, SubscriptionStatus } from '../types';
+import type { Charge, Customer, Dispute, Invoice, Plan, Refund, Subscription, SubscriptionItem, SubscriptionStatus } from '../types';
 
 type Loose = Record<string, any>;
 
@@ -46,9 +46,20 @@ export function mapCustomer(c: Stripe.Customer | Loose): Customer {
   };
 }
 
+export function mapSubscriptionItem(i: Stripe.SubscriptionItem | Loose): SubscriptionItem {
+  const obj = i as Loose;
+  return {
+    id: obj.id ?? '',
+    priceId: idOf(obj.price) ?? idOf(obj.plan) ?? '',
+    // Metered prices carry no quantity.
+    quantity: typeof obj.quantity === 'number' ? obj.quantity : null,
+  };
+}
+
 export function mapSubscription(s: Stripe.Subscription | Loose): Subscription {
   const obj = s as Loose;
-  const item = obj.items?.data?.[0] as Loose | undefined;
+  const data = (obj.items?.data as Loose[] | undefined) ?? [];
+  const item = data[0];
   const status = SUBSCRIPTION_STATUSES.has(obj.status) ? (obj.status as SubscriptionStatus) : 'incomplete';
   return {
     id: obj.id,
@@ -56,6 +67,7 @@ export function mapSubscription(s: Stripe.Subscription | Loose): Subscription {
     tenantId: tenantOf(obj),
     planId: idOf(item?.price) ?? idOf(item?.plan) ?? '',
     quantity: item?.quantity ?? obj.quantity ?? 1,
+    items: data.map(mapSubscriptionItem),
     status,
     currentPeriodStart: toDate(obj.current_period_start ?? item?.current_period_start),
     currentPeriodEnd: toDate(obj.current_period_end ?? item?.current_period_end),
@@ -174,6 +186,8 @@ export function mapPrice(p: Stripe.Price | Loose): Plan {
     currency: String(obj.currency ?? 'usd'),
     interval: obj.recurring?.interval ?? null,
     active: Boolean(obj.active),
+    lookupKey: obj.lookup_key ?? null,
     metadata: metadataOf(obj),
+    productMetadata: product ? metadataOf(product) : {},
   };
 }
